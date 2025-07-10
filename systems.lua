@@ -465,26 +465,4 @@ function Systems.cycleActivePlayer()
     end
 end
 
---------------------------------------------------------------------------------
--- DRAWING SYSTEMS
---------------------------------------------------------------------------------
-
-function Systems.drawHealthBar(square)
-    local barWidth, barHeight, barYOffset = square.size, 3, square.size + 2
-    love.graphics.setColor(1, 0, 0, 1)
-    love.graphics.rectangle("fill", square.x, square.y + barYOffset, barWidth, barHeight)
-    local currentHealthWidth = (square.hp / square.maxHp) * barWidth
-    love.graphics.setColor(0, 1, 0, 1)
-    love.graphics.rectangle("fill", square.x, square.y + barYOffset, currentHealthWidth, barHeight)
-end
-
-function Systems.drawActionBar(square)
-    local barWidth, barHeight, barYOffset = square.size, 3, square.size + 2 + 3 + 2
-    love.graphics.setColor(0.3, 0, 0, 1)
-    love.graphics.rectangle("fill", square.x, square.y + barYOffset, barWidth, barHeight)
-    local currentFillWidth = (square.actionBarCurrent / square.actionBarMax) * barWidth
-    love.graphics.setColor(1, 0, 0, 1)
-    love.graphics.rectangle("fill", square.x, square.y + barYOffset, currentFillWidth, barHeight)
-end
-
 return Systems

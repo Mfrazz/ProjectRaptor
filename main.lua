@@ -10,6 +10,8 @@ local createSquare = require("entities")
 Systems = require("systems")
 Systems.attacks = require("player_attacks")
 local AISystems = require("ai_systems")
+local Renderer = require("renderer")
+local InputHandler = require("input_handler")
 
 -- Global game state tables (accessible by systems.lua)
 players = {}
@@ -24,8 +26,8 @@ afterimageEffects = {}
 -- Global game state variables
 activePlayerIndex = 1
 gameTimer = 0
-isGameTimerFrozen = false
-isPaused = false
+isGameTimerFrozen = false -- This is fine to keep separate
+gameState = "gameplay" -- NEW: "gameplay", "party_select", "dialogue", etc.
 lastAttackTimestamp = 0
 isAutopilotActive = false
 playerTeamStatus = {} -- For team-wide status effects like Striped Square's L-ability
@@ -101,7 +103,7 @@ end
 -- It's used for game logic, such as updating player positions and attacks.
 function love.update(dt)
     -- Only update game logic if not paused
-    if not isPaused then
+    if gameState == "gameplay" then
         local windowWidth, windowHeight = love.graphics.getDimensions()
 
         -- Update Game Timer (only if not frozen by enemy death)
@@ -185,7 +187,7 @@ function love.update(dt)
 
                         if hitWall or hitTeammate then
                             -- Stop careening, create ripple
-                            Systems.createRippleEffect(effect.attacker, s.x + s.size/2, s.y + s.size/2, 0, 3, "all")
+                            Systems.createRippleEffect(effect.attacker, s.x + s.size/2, s.y + s.size/2, 10, 3, "all")
                             s.statusEffects.careening = nil
                         else
                             -- Move to next tile
@@ -359,44 +361,7 @@ function love.update(dt)
             end
         end
 
-        -- Update Player Movement Logic
-        -- First, handle input for the active player to set a new target
-        if activePlayerIndex > 0 and players[activePlayerIndex] then
-            local currentPlayer = players[activePlayerIndex]
-            local isCurrentPlayerMoving = (currentPlayer.x ~= currentPlayer.targetX) or (currentPlayer.y ~= currentPlayer.targetY)
-
-            -- If not currently moving, check for new input to set a new target
-            if not isCurrentPlayerMoving and not currentPlayer.statusEffects.careening then
-                local newTargetX = currentPlayer.x
-                local newTargetY = currentPlayer.y
-
-                -- Determine potential new target based on input and update lastDirection
-                if love.keyboard.isDown("w") then
-                    newTargetY = newTargetY - currentPlayer.moveStep
-                    currentPlayer.lastDirection = "up"
-                elseif love.keyboard.isDown("s") then
-                    newTargetY = newTargetY + currentPlayer.moveStep
-                    currentPlayer.lastDirection = "down"
-                elseif love.keyboard.isDown("a") then
-                    newTargetX = newTargetX - currentPlayer.moveStep
-                    currentPlayer.lastDirection = "left"
-                elseif love.keyboard.isDown("d") then
-                    newTargetX = newTargetX + currentPlayer.moveStep
-                    currentPlayer.lastDirection = "right"
-                end
-
-                -- Clamp the new target position to screen bounds
-                newTargetX = math.max(0, math.min(newTargetX, windowWidth - currentPlayer.size))
-                newTargetY = math.max(0, math.min(newTargetY, windowHeight - currentPlayer.size))
-
-                -- If a new valid target was determined AND the tile is not occupied, set it
-                if (newTargetX ~= currentPlayer.x or newTargetY ~= currentPlayer.y) and
-                   not Systems.isTileOccupied(newTargetX, newTargetY, currentPlayer.size, currentPlayer) then
-                    currentPlayer.targetX = newTargetX
-                    currentPlayer.targetY = newTargetY
-                end
-            end
-        end
+        InputHandler.handle_movement_input()
 
         -- Second, update the position of ALL players based on their target
         for _, p in ipairs(players) do
@@ -674,459 +639,39 @@ function love.update(dt)
                 table.remove(enemies, i)
             end
         end
-    end -- End of if not isPaused
+    end -- End of if gameState == "gameplay"
 end
 
 -- love.keypressed(key) is used for discrete actions, like switching players or attacking.
 function love.keypressed(key)
-    -- Toggle pause state with Escape key
-    if key == "escape" then
-        isPaused = not isPaused
-        if not isPaused then
-            -- Logic to apply changes when unpausing
-            local oldPlayerTypes = {}
-            for _, p in ipairs(players) do table.insert(oldPlayerTypes, p.playerType) end
-
-            local newPlayerTypes = {}
-            for i = 1, 3 do
-                if characterGrid[1][i] then table.insert(newPlayerTypes, characterGrid[1][i]) end
-            end
-
-            -- Check if the party has changed
-            local partyChanged = false
-            if #oldPlayerTypes ~= #newPlayerTypes then
-                partyChanged = true
-            else
-                for i = 1, #oldPlayerTypes do
-                    if oldPlayerTypes[i] ~= newPlayerTypes[i] then
-                        partyChanged = true
-                        break
-                    end
-                end
-            end
-
-            if partyChanged then
-                local oldPositions = {}
-                for _, p in ipairs(players) do table.insert(oldPositions, {x = p.x, y = p.y, targetX = p.targetX, targetY = p.targetY}) end
-
-                -- Rebuild the party, but only with living members
-                players = {}
-                local livingPlayersInNewParty = {}
-
-                -- First, filter for living characters from the desired new party
-                for _, playerType in ipairs(newPlayerTypes) do
-                    local playerObject = roster[playerType]
-                    if playerObject.hp > 0 then
-                        table.insert(livingPlayersInNewParty, playerObject)
-                    end
-                end
-
-                -- Now, assign positions and build the final players table
-                for i, newPlayer in ipairs(livingPlayersInNewParty) do
-                    if oldPositions[i] then
-                        -- If there was a player in this slot before, use their position.
-                        newPlayer.x, newPlayer.y, newPlayer.targetX, newPlayer.targetY = oldPositions[i].x, oldPositions[i].y, oldPositions[i].targetX, oldPositions[i].targetY
-                    elseif oldPositions[1] then
-                        -- Otherwise, if it's a new character, place them at the first player's position.
-                        newPlayer.x, newPlayer.y, newPlayer.targetX, newPlayer.targetY = oldPositions[1].x, oldPositions[1].y, oldPositions[1].targetX, oldPositions[1].targetY
-                    else
-                        -- As a last resort, if the party was empty, place them in the middle of the screen.
-                        local windowWidth, windowHeight = love.graphics.getDimensions()
-                        newPlayer.x, newPlayer.y = windowWidth / 2, windowHeight / 2
-                        newPlayer.targetX, newPlayer.targetY = newPlayer.x, newPlayer.y
-                    end
-                    table.insert(players, newPlayer)
-                end
-            end
-        end
-        selectedSquare = nil -- Reset selection on pause/unpause
-        return
-    end
-
-    -- Only allow other key presses if not paused
-    if not isPaused then
-        -- Prevent attacks if global cooldown is active
-        if love.timer.getTime() - lastAttackTimestamp < Config.ATTACK_COOLDOWN_GLOBAL then
-            return
-        end
-
-        -- Toggle Autopilot
-        if key == "u" then
-            isAutopilotActive = not isAutopilotActive
-            if isAutopilotActive then
-                activePlayerIndex = 0 -- No player is controlled
-            else
-                -- If turning off autopilot, give control to the first player if they exist
-                if #players > 0 then
-                    activePlayerIndex = 1
-                    players[activePlayerIndex].flashTimer = Config.FLASH_DURATION
-                else
-                    activePlayerIndex = 0
-                end
-            end
-            return -- Consume key press
-        end
-
-        -- Switch active player (now on ';')
-        if key == ";" and #players > 0 then
-            isAutopilotActive = false -- Always turn off autopilot when cycling
-            Systems.cycleActivePlayer()
-            return -- Consume the key press
-        end
-
-        -- Queue or execute attack for active player
-        if activePlayerIndex > 0 and players[activePlayerIndex] then
-            local currentPlayer = players[activePlayerIndex]
-            local isMoving = (currentPlayer.x ~= currentPlayer.targetX) or (currentPlayer.y ~= currentPlayer.targetY)
-
-            local attackData = CharacterBlueprints[currentPlayer.playerType].attacks[key]
-            local attackCost = attackData and attackData.cost
-
-            -- Check if action bar is sufficient for the attack
-            if attackCost and (currentPlayer.actionBarCurrent >= currentPlayer.actionBarMax or currentPlayer.continuousAttack) and not currentPlayer.statusEffects.stunned and not currentPlayer.statusEffects.careening then
-                if key == "j" or key == "k" or key == "l" then
-                    if isMoving then
-                        -- If moving, queue the attack to execute after movement
-                        currentPlayer.pendingAttackKey = key
-                    else
-                        -- If not moving, execute immediately
-                        currentPlayer.ai_last_attack_key = key -- Remember the attack for the AI to repeat
-                        local wasContinuousBefore = currentPlayer.continuousAttack
-                        Systems.executeAttack(currentPlayer, key)
-
-                        local isStoppingContinuous = wasContinuousBefore and not currentPlayer.continuousAttack
-                        if not isStoppingContinuous then -- Don't reset bar if we just stopped a continuous attack
-                            currentPlayer.actionBarCurrent = 0
-                            currentPlayer.actionBarMax = attackCost
-                        end
-                        lastAttackTimestamp = love.timer.getTime() -- Record attack time
-                    end
-                    -- No automatic cycle to next player after attack.
-                end
-            end
-        end
-else -- Game is paused, handle character select input
-        if key == "w" then cursorPos.y = math.max(1, cursorPos.y - 1)
-        elseif key == "s" then cursorPos.y = math.min(3, cursorPos.y + 1)
-        elseif key == "a" then cursorPos.x = math.max(1, cursorPos.x - 1)
-        elseif key == "d" then cursorPos.x = math.min(3, cursorPos.x + 1)
-        elseif key == "j" then
-            if not selectedSquare then
-                -- Select the first square
-                if characterGrid[cursorPos.y] and characterGrid[cursorPos.y][cursorPos.x] then
-                    selectedSquare = {x = cursorPos.x, y = cursorPos.y}
-                end
-            else
-                -- Select the second square and perform the swap
-                local secondSquareType = characterGrid[cursorPos.y] and characterGrid[cursorPos.y][cursorPos.x]
-                if secondSquareType then
-                    local firstSquareType = characterGrid[selectedSquare.y][selectedSquare.x]
-                    characterGrid[selectedSquare.y][selectedSquare.x] = secondSquareType
-                    characterGrid[cursorPos.y][cursorPos.x] = firstSquareType
-                end
-                selectedSquare = nil -- Reset selection after swap
-            end
-        end
-    end
+    -- Pass the current state to the handler and get the new state back.
+    gameState = InputHandler.handle_key_press(key, gameState)
 end
 
 
 
--- love.draw() is called every frame after love.update().
--- It's used to render graphics on the screen.
 function love.draw()
-    -- Draw afterimage effects
-    for _, a in ipairs(afterimageEffects) do
-        local alpha = (a.lifetime / a.initialLifetime) * 0.5 -- Max 50% transparent
-        love.graphics.setColor(a.color[1], a.color[2], a.color[3], alpha)
+    -- 1. Package all game state data into a single table.
+    local gameState = {
+        players = players,
+        enemies = enemies,
+        attackEffects = attackEffects,
+        beamProjectiles = beamProjectiles,
+        particleEffects = particleEffects,
+        damagePopups = damagePopups,
+        switchPlayerEffects = switchPlayerEffects,
+        afterimageEffects = afterimageEffects,
+        activePlayerIndex = activePlayerIndex,
+        gameTimer = gameTimer,
+        isAutopilotActive = isAutopilotActive,
+        isPaused = (gameState ~= "gameplay"), -- The renderer can derive this
+        characterGrid = characterGrid,
+        cursorPos = cursorPos,
+        selectedSquare = selectedSquare
+    }
 
-        if a.playerType == "stripedsquare" then
-            love.graphics.push()
-            love.graphics.setScissor(a.x, a.y, a.size, a.size)
-            -- Draw base color (black)
-            love.graphics.rectangle("fill", a.x, a.y, a.size, a.size)
-            -- Draw stripes
-            love.graphics.setColor(1, 1, 1, alpha) -- White stripes
-            love.graphics.setLineWidth(2)
-            for i = -a.size, a.size, 4 do
-                love.graphics.line(a.x + i, a.y, a.x + i + a.size, a.y + a.size)
-            end
-            love.graphics.setLineWidth(1)
-            love.graphics.setScissor()
-            love.graphics.pop()
-        else
-            love.graphics.rectangle("fill", a.x, a.y, a.size, a.size)
-        end
-    end
-
-    -- Draw all players
-    for i, p in ipairs(players) do
-        love.graphics.push()
-        if p.shakeTimer > 0 then
-            local offsetX = math.random(-p.shakeIntensity, p.shakeIntensity)
-            local offsetY = math.random(-p.shakeIntensity, p.shakeIntensity)
-            love.graphics.translate(offsetX, offsetY)
-        end
-
-        love.graphics.setColor(p.color) -- Set the square's color
-        love.graphics.rectangle("fill", p.x, p.y, p.size, p.size)
-
-        -- Draw status effect overlays for players
-        if p.statusEffects.stunned then
-            love.graphics.setColor(0.5, 0, 0.5, 0.5) -- Semi-transparent purple
-            love.graphics.rectangle("fill", p.x, p.y, p.size, p.size)
-        elseif p.statusEffects.paralyzed then
-            love.graphics.setColor(1, 1, 0, 0.4) -- Semi-transparent yellow
-            love.graphics.rectangle("fill", p.x, p.y, p.size, p.size)
-        elseif p.statusEffects.poison then
-            -- Pulsating pink tint for poison
-            local pulse = (math.sin(love.timer.getTime() * 8) + 1) / 2 -- Fast pulse (0 to 1)
-            local alpha = 0.2 + pulse * 0.3 -- Alpha from 0.2 to 0.5
-            love.graphics.setColor(1, 0.4, 0.7, alpha) -- Pink
-            love.graphics.rectangle("fill", p.x, p.y, p.size, p.size)
-        end
-
-        -- Special drawing logic for stripedsquare
-        if p.playerType == "stripedsquare" then
-            -- Use a scissor to ensure stripes don't draw outside the square
-            love.graphics.setScissor(p.x, p.y, p.size, p.size)
-            love.graphics.setColor(1, 1, 1, 1) -- White stripes
-            love.graphics.setLineWidth(2)
-            for i = -p.size, p.size, 4 do
-                love.graphics.line(p.x + i, p.y, p.x + i + p.size, p.y + p.size)
-            end
-            love.graphics.setLineWidth(1)
-            -- Disable the scissor so other things can be drawn normally
-            love.graphics.setScissor()
-        end
-
-        -- Draw shield effect for Striped L-Ability
-        if p.shieldEffectTimer and p.shieldEffectTimer > 0 then
-            p.shieldEffectTimer = p.shieldEffectTimer - love.timer.getDelta()
-            love.graphics.setColor(0, 1, 0, 0.4) -- Semi-transparent green
-            love.graphics.rectangle("fill", p.x, p.y, p.size, p.size)
-        end
-
-        Systems.drawHealthBar(p) -- Draw health bar for player
-        Systems.drawActionBar(p) -- Draw action bar for player
-
-        -- Draw flash effect if active and flashing
-        if p.flashTimer > 0 then
-            local alpha = p.flashTimer / Config.FLASH_DURATION -- Fade out effect
-            love.graphics.setColor(1, 1, 1, alpha) -- White flash
-
-            -- Calculate 3x3 grid behind the square for the flash
-            local flashX = p.x - p.moveStep
-            local flashY = p.y - p.moveStep
-            local flashWidth = p.size * 3
-            local flashHeight = p.size * 3
-
-            love.graphics.rectangle("fill", flashX, flashY, flashWidth, flashHeight)
-        end
-
-        -- If this is the active player, draw a white border around it
-        if not isAutopilotActive and i == activePlayerIndex then
-            love.graphics.setColor(1, 1, 1, 1) -- White border (R, G, B, Alpha)
-            love.graphics.setLineWidth(2)
-            love.graphics.rectangle("line", p.x, p.y, p.size, p.size)
-            love.graphics.setLineWidth(1) -- Reset line width
-        end
-
-        love.graphics.pop()
-    end
-
-    -- Draw all enemies
-    for _, e in ipairs(enemies) do
-        love.graphics.push()
-        if e.shakeTimer > 0 then
-            local offsetX = math.random(-e.shakeIntensity, e.shakeIntensity)
-            local offsetY = math.random(-e.shakeIntensity, e.shakeIntensity)
-            love.graphics.translate(offsetX, offsetY)
-        end
-
-        love.graphics.setColor(e.color) -- Set the enemy's color (light grey)
-        love.graphics.rectangle("fill", e.x, e.y, e.size, e.size)
-
-        if e.enemyType == "archer" then
-            love.graphics.setColor(0, 0, 0, 1) -- Black letter
-            love.graphics.printf("A", e.x, e.y + e.size / 4, e.size, "center")
-        elseif e.enemyType == "brawler" then
-            love.graphics.setColor(0, 0, 0, 1) -- Black letter
-            love.graphics.printf("B", e.x, e.y + e.size / 4, e.size, "center")
-        elseif e.enemyType == "punter" then
-            love.graphics.setColor(0, 0, 0, 1) -- Black letter
-            love.graphics.printf("P", e.x, e.y + e.size / 4, e.size, "center")
-        end
-
-        Systems.drawHealthBar(e) -- Draw health bar for enemy
-        Systems.drawActionBar(e) -- Draw action bar for enemy
-        -- Draw status effect overlays for enemies
-        if e.statusEffects.stunned then
-            love.graphics.setColor(0.5, 0, 0.5, 0.5) -- Semi-transparent purple
-            love.graphics.rectangle("fill", e.x, e.y, e.size, e.size)
-        elseif e.statusEffects.paralyzed then
-            love.graphics.setColor(1, 1, 0, 0.4) -- Semi-transparent yellow
-            love.graphics.rectangle("fill", e.x, e.y, e.size, e.size)
-        elseif e.statusEffects.poison then
-            -- Pulsating pink tint for poison
-            local pulse = (math.sin(love.timer.getTime() * 8) + 1) / 2 -- Fast pulse (0 to 1)
-            local alpha = 0.2 + pulse * 0.3 -- Alpha from 0.2 to 0.5
-            love.graphics.setColor(1, 0.4, 0.7, alpha) -- Pink
-            love.graphics.rectangle("fill", e.x, e.y, e.size, e.size)
-        end
-
-        love.graphics.pop()
-    end
-
-    -- Draw active attack effects (flashing tiles)
-    for i = #attackEffects, 1, -1 do -- Iterate backwards to safely remove elements
-        local effect = attackEffects[i]
-        -- Only draw if the initial delay has passed
-        if effect.initialDelay <= 0 then
-            -- Calculate alpha for flashing effect (e.g., fade out)
-            local alpha = effect.currentFlashTimer / effect.flashDuration
-            love.graphics.setColor(effect.color[1], effect.color[2], effect.color[3], alpha) -- Use effect's color
-            love.graphics.rectangle("fill", effect.x, effect.y, effect.width, effect.height)
-        end
-
-        -- Special drawing for triangle beam
-        if effect.statusEffect and effect.statusEffect.type == "triangle_beam" then
-            local alpha = effect.currentFlashTimer / effect.flashDuration
-            love.graphics.setColor(effect.color[1], effect.color[2], effect.color[3], alpha)
-            love.graphics.setLineWidth(effect.statusEffect.thickness)
-            for _, line in ipairs(effect.statusEffect.lines) do
-                love.graphics.line(line.x1, line.y1, line.x2, line.y2)
-            end
-            love.graphics.setLineWidth(1)
-        end
-    end
-
-    -- Draw Yellowsquare's beam projectiles
-    for _, beam in ipairs(beamProjectiles) do
-        love.graphics.setColor(1, 0, 0, 1) -- Red color for the beam
-        love.graphics.rectangle("fill", beam.x, beam.y, beam.size, beam.size)
-    end
-
-    -- Draw particle effects
-    for _, p in ipairs(particleEffects) do
-        -- Fade out the particle as its lifetime decreases
-        local alpha = (p.lifetime / p.initialLifetime)
-        love.graphics.setColor(p.color[1], p.color[2], p.color[3], alpha)
-        love.graphics.rectangle("fill", p.x, p.y, p.size, p.size)
-    end
-
-    -- Draw damage popups
-    love.graphics.setColor(1, 1, 1, 1) -- Reset color
-    for _, p in ipairs(damagePopups) do
-        local alpha = (p.lifetime / p.initialLifetime)
-        love.graphics.setColor(p.color[1], p.color[2], p.color[3], alpha)
-        love.graphics.print(p.text, p.x, p.y)
-    end
-
-    -- Draw player switch "comet" effect
-    for _, effect in ipairs(switchPlayerEffects) do
-        -- Draw trail
-        for _, p in ipairs(effect.trail) do
-            local alpha = p.lifetime / p.initialLifetime
-            love.graphics.setColor(1, 1, 1, alpha * 0.8)
-            love.graphics.circle("fill", p.x, p.y, 4)
-        end
-
-        -- Draw head
-        love.graphics.setColor(1, 1, 1, 1)
-        love.graphics.circle("fill", effect.currentX, effect.currentY, 6)
-    end
-
-
-    -- Display instructions and square coordinates
-    love.graphics.setColor(1, 1, 1, 1) -- Set color back to white for text
-    love.graphics.print("Time: " .. string.format("%.0f", gameTimer), 10, 10) -- Display game timer (whole number)
-    love.graphics.print("Active Player: " .. (activePlayerIndex > 0 and players[activePlayerIndex].playerType or "N/A"), 10, 30)
-    love.graphics.print("Press WASD to move the active square", 10, 50)
-    love.graphics.print("Press ; to switch active square", 10, 70)
-    love.graphics.print("Press U to toggle Autopilot", 10, 90)
-    love.graphics.print("Press J (Primary), K (Secondary), or L (Tertiary) Attack", 10, 110)
-
-    -- Print X/Y values and HP for all players
-    local yOffset = 130
-    for i, p in ipairs(players) do
-        love.graphics.print(string.format("P%d (%s): HP=%d/%d Atk=%d Def=%d AB=%.1f/%.1f", i, p.playerType, p.hp, p.maxHp, p.attackStat, p.defenseStat, p.actionBarCurrent, p.actionBarMax), 10, yOffset)
-        yOffset = yOffset + 20
-    end
-    -- Print X/Y values and HP for all enemies
-    for i, e in ipairs(enemies) do
-        local statusText = ""
-        if e.statusEffects then
-            for effect, data in pairs(e.statusEffects) do
-                statusText = statusText .. " (" .. string.upper(effect) .. ")"
-            end
-        end
-        love.graphics.print(string.format("%s %d: HP=%d/%d Atk=%d Def=%d AB=%.1f/%.1f%s", string.upper(e.enemyType), i, e.hp, e.maxHp, e.attackStat, e.defenseStat, e.actionBarCurrent, e.actionBarMax, statusText), 10, yOffset)
-        yOffset = yOffset + 20
-    end
-
-    -- Display Autopilot status
-    if isAutopilotActive then
-        love.graphics.setColor(0, 1, 1, 1) -- Cyan
-        love.graphics.printf("AUTOPILOT ENGAGED", 0, love.graphics.getHeight() - 30, love.graphics.getWidth(), "center")
-        love.graphics.setColor(1, 1, 1, 1) -- Reset to white
-    end
-
-    -- Display PAUSED message and party select screen if game is paused
-    if isPaused then
-        -- Draw a semi-transparent background overlay
-        love.graphics.setColor(0, 0, 0, 0.7)
-        love.graphics.rectangle("fill", 0, 0, love.graphics.getWidth(), love.graphics.getHeight())
-
-        love.graphics.setColor(1, 1, 1, 1) -- White color
-  love.graphics.printf("PARTY SELECT", 0, 40, love.graphics.getWidth(), "center")
-        love.graphics.printf("Top row is your active party. Use WASD to move and J to swap.", 0, 60, love.graphics.getWidth(), "center")
-
-        -- Draw the character grid
-        local gridSize = 80
-        local gridStartX = love.graphics.getWidth() / 2 - (gridSize * 1.5)
-        local gridStartY = love.graphics.getHeight() / 2 - (gridSize * 1.5)
-
-        for y = 1, 3 do
-            for x = 1, 3 do
-                local playerType = characterGrid[y][x]
-                if playerType then
-                    local squareDisplaySize = gridSize * 0.9
-                    local squareX = gridStartX + (x - 1) * gridSize
-                    local squareY = gridStartY + (y - 1) * gridSize
-                    local blueprint = CharacterBlueprints[playerType]
-                    love.graphics.setColor(blueprint.color)
-                    love.graphics.rectangle("fill", squareX, squareY, squareDisplaySize, squareDisplaySize)
-
-                    -- Draw stripes for stripedsquare on the select screen
-                    if playerType == "stripedsquare" then
-                        love.graphics.setScissor(squareX, squareY, squareDisplaySize, squareDisplaySize)
-                        love.graphics.setColor(1, 1, 1, 1) -- White stripes
-                        love.graphics.setLineWidth(4) -- Thicker lines for the UI
-                        for i = -squareDisplaySize, squareDisplaySize, 10 do -- Wider spacing for the UI
-                            love.graphics.line(squareX + i, squareY, squareX + i + squareDisplaySize, squareY + squareDisplaySize)
-                        end
-                        love.graphics.setLineWidth(1)
-                        love.graphics.setScissor()
-                    end
-
-                    -- Draw selection highlight
-                    if selectedSquare and selectedSquare.x == x and selectedSquare.y == y then
-                        love.graphics.setColor(0, 1, 0, 1) -- Green highlight
-                        love.graphics.setLineWidth(3)
-                        love.graphics.rectangle("line", squareX, squareY, squareDisplaySize, squareDisplaySize)
-                        love.graphics.setLineWidth(1)
-                    end
-                end
-            end
-        end
-
-        -- Draw the cursor
-        love.graphics.setColor(1, 1, 0, 1) -- Yellow cursor
-        love.graphics.setLineWidth(3)
-        love.graphics.rectangle("line", gridStartX + (cursorPos.x - 1) * gridSize, gridStartY + (cursorPos.y - 1) * gridSize, gridSize * 0.9, gridSize * 0.9)
-        love.graphics.setLineWidth(1)
-    end
+    -- 2. Pass the entire game state to the renderer.
+    Renderer.draw_frame(gameState)
 end
 
 -- love.quit() is called when the game closes.
