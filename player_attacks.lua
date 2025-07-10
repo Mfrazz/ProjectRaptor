@@ -77,9 +77,36 @@ PlayerAttacks.patterns.pink_k = function(square)
     return PlayerAttacks.patterns.cyan_j(square)
 end
 
+PlayerAttacks.patterns.pink_l = function(square)
+    local effectSize = Config.MOVE_STEP * 11
+    local effectOriginX, effectOriginY = square.x - (Config.MOVE_STEP * 5), square.y - (Config.MOVE_STEP * 5)
+    return {{shape = {type = "rect", x = effectOriginX, y = effectOriginY, w = effectSize, h = effectSize}, delay = 0}}
+end
+
+PlayerAttacks.patterns.yellow_j = function(square)
+    local sx, sy, size = square.x, square.y, square.size
+    local windowWidth, windowHeight = love.graphics.getDimensions()
+    local attackOriginX, attackOriginY, attackWidth, attackHeight
+
+    if square.lastDirection == "up" then
+        attackOriginX, attackOriginY = sx, 0
+        attackWidth, attackHeight = size, sy
+    elseif square.lastDirection == "down" then
+        attackOriginX, attackOriginY = sx, sy + size
+        attackWidth, attackHeight = size, windowHeight - (sy + size)
+    elseif square.lastDirection == "left" then
+        attackOriginX, attackOriginY = 0, sy
+        attackWidth, attackHeight = sx, size
+    elseif square.lastDirection == "right" then
+        attackOriginX, attackOriginY = sx + size, sy
+        attackWidth, attackHeight = windowWidth - (sx + size), size
+    end
+    return {{shape = {type = "rect", x = attackOriginX, y = attackOriginY, w = attackWidth, h = attackHeight}, delay = 0}}
+end
+
 PlayerAttacks.patterns.yellow_k = function(square)
     local step = Config.MOVE_STEP
-    local rangeOffset = step * 12
+    local rangeOffset = step * 8
     local rippleCenterSize = 4
     local pcx = square.x + square.size / 2
     local pcy = square.y + square.size / 2
@@ -127,14 +154,14 @@ end
 -- Helper function to execute attacks based on a pattern generator.
 -- This reduces code duplication by handling the common logic of iterating
 -- through a pattern's effects and creating the corresponding attack visuals/logic.
-local function executePatternAttack(square, power, patternFunc, isHeal, targetType, statusEffect)
+local function executePatternAttack(square, power, patternFunc, isHeal, targetType, statusEffect, specialProperties)
     local effects = patternFunc(square)
     local color = isHeal and {0.5, 1, 0.5, 1} or {1, 0, 0, 1}
     targetType = targetType or (isHeal and "all" or "enemy")
 
     for _, effectData in ipairs(effects) do
         local s = effectData.shape
-        Systems.addAttackEffect(s.x, s.y, s.w, s.h, color, effectData.delay, square, power, isHeal, targetType, nil, statusEffect)
+        Systems.addAttackEffect(s.x, s.y, s.w, s.h, color, effectData.delay, square, power, isHeal, targetType, nil, statusEffect, specialProperties)
     end
 end
 
@@ -190,7 +217,7 @@ PlayerAttacks.pink_j = function(square, power)
 end
 
 PlayerAttacks.pink_k = function(square, power)
-    executePatternAttack(square, power, PlayerAttacks.patterns.pink_k, true, "all")
+    executePatternAttack(square, power, PlayerAttacks.patterns.pink_k, true, "all", nil, {cleansesPoison = true})
 end
 
 PlayerAttacks.pink_l = function(square, power)
@@ -201,7 +228,7 @@ PlayerAttacks.pink_l = function(square, power)
         if p ~= square and p.hp > 0 then
             local pCenterX, pCenterY = p.x + p.size / 2, p.y + p.size / 2
             if pCenterX >= effectOriginX and pCenterX < effectOriginX + effectSize and pCenterY >= effectOriginY and pCenterY < effectOriginY + effectSize then
-                p.actionBarCurrent = p.speedStat
+                p.actionBarCurrent = p.actionBarMax
             end
         end
     end

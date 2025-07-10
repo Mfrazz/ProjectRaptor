@@ -9,6 +9,7 @@ CharacterBlueprints = require("character_blueprints")
 local createSquare = require("entities")
 Systems = require("systems")
 Systems.attacks = require("player_attacks")
+local AISystems = require("ai_systems")
 
 -- Global game state tables (accessible by systems.lua)
 players = {}
@@ -26,6 +27,7 @@ gameTimer = 0
 isGameTimerFrozen = false
 isPaused = false
 lastAttackTimestamp = 0
+isAutopilotActive = false
 playerTeamStatus = {} -- For team-wide status effects like Striped Square's L-ability
 
 -- Character Select State
@@ -84,9 +86,13 @@ function love.load()
     enemies[1] = createSquare(windowWidth / 2 + 100, windowHeight / 2 + 40, "enemy", "brawler")
     enemies[2] = createSquare(windowWidth / 2 - 100, windowHeight / 2 - 80, "enemy", "brawler")
     enemies[3] = createSquare(windowWidth / 2, windowHeight / 2 + 100, "enemy", "archer")
+    enemies[4] = createSquare(windowWidth / 2 - 100, windowHeight / 2 + 100, "enemy", "punter")
+    enemies[5] = createSquare(windowWidth / 2 + 100, windowHeight / 2 - 80, "enemy", "archer")
+    enemies[6] = createSquare(windowWidth / 2, windowHeight / 2 - 80, "enemy", "punter")
 
     -- Set the background color
     love.graphics.setBackgroundColor(0.1, 0.1, 0.1, 1) -- Dark grey
+
 end
 
 
@@ -196,15 +202,15 @@ function love.update(dt)
         end
 
         for _, s in ipairs(allActiveSquares) do
-            if s.hp > 0 and s.actionBarCurrent < s.speedStat and not s.statusEffects.stunned and not s.continuousAttack then
+            if s.hp > 0 and s.actionBarCurrent < s.actionBarMax and not s.statusEffects.stunned and not s.continuousAttack then
                 -- If paralyzed, action bar fills at half rate. Stunned prevents fill entirely.
                 local effectiveDt = dt
                 if s.statusEffects.paralyzed then
                     effectiveDt = dt / 2
                 end
                 s.actionBarCurrent = s.actionBarCurrent + effectiveDt
-                if s.actionBarCurrent > s.speedStat then
-                    s.actionBarCurrent = s.speedStat -- Cap at full
+                if s.actionBarCurrent > s.actionBarMax then
+                    s.actionBarCurrent = s.actionBarMax -- Cap at full
                 end
             end
             if s.type == "player" and s.flashTimer > 0 then
@@ -433,294 +439,6 @@ function love.update(dt)
             end
         end
 
-        -- Player AI Logic
-        for i, p in ipairs(players) do
-            -- AI only runs for non-active players who are able to act
-            if i ~= activePlayerIndex and p.hp > 0 and not p.statusEffects.stunned and not p.statusEffects.careening and not p.continuousAttack then
-                if p.ai_mode == "normal" then
-                    local isMoving = (p.x ~= p.targetX) or (p.y ~= p.targetY)
-
-                    -- 1. AI Attack Logic
-                    if p.ai_last_attack_key and not isMoving then
-                        local attackData = CharacterBlueprints[p.playerType].attacks[p.ai_last_attack_key]
-                        if attackData then
-                            local attackCost = attackData.cost or p.speedStat
-                            if p.actionBarCurrent >= attackCost then
-                                local canAttack = false
-                                local patternFunc = Systems.attacks.patterns[attackData.name]
-
-                                if patternFunc then
-                                    -- For pattern-based attacks, check if an enemy is actually inside the attack area.
-                                    -- This is more accurate than a simple range check.
-                                    if attackData.name == "pink_k" then
-                                        -- Special case for heals; for now, AI can always use it if available.
-                                        -- A better AI would check ally health.
-                                        canAttack = true
-                                    else
-                                        canAttack = Systems.isTargetInPattern(p, patternFunc, enemies)
-                                    end
-                                else
-                                    -- For non-pattern attacks (e.g., projectiles, global buffs), fall back to range check.
-                                    if not attackData.range or attackData.range < 0 then
-                                        canAttack = true -- No range check needed (e.g., global buffs/debuffs).
-                                    else
-                                        local closestEnemy, shortestDistSq = nil, math.huge
-                                        for _, enemy in ipairs(enemies) do
-                                            if enemy.hp > 0 then
-                                                local distSq = (enemy.x - p.x)^2 + (enemy.y - p.y)^2
-                                                if distSq < shortestDistSq then
-                                                    shortestDistSq, closestEnemy = distSq, enemy
-                                                end
-                                            end
-                                        end
-
-                                        if closestEnemy and shortestDistSq <= (attackData.range * Config.MOVE_STEP)^2 then
-                                            canAttack = true
-                                        end
-                                    end
-                                end
-
-                                if canAttack then
-                                    local wasContinuousBefore = p.continuousAttack
-                                    Systems.executeAttack(p, p.ai_last_attack_key)
-                                    local isStoppingContinuous = wasContinuousBefore and not p.continuousAttack
-                                    if not isStoppingContinuous then
-                                        p.actionBarCurrent = p.actionBarCurrent - attackCost
-                                        if p.actionBarCurrent < 0 then p.actionBarCurrent = 0 end
-                                    end
-                                end
-                            end
-                        end
-                    end
-
-                    -- 2. AI Movement Logic
-                    if not isMoving then
-                        -- If we have a path, take the next step.
-                        if #p.ai_path > 0 then
-                            local nextStep = table.remove(p.ai_path, 1)
-                            p.targetX = nextStep.x
-                            p.targetY = nextStep.y
-
-                            -- Update facing direction based on the single-tile move
-                            if p.targetX ~= p.x then p.lastDirection = (p.targetX > p.x) and "right" or "left"
-                            elseif p.targetY ~= p.y then p.lastDirection = (p.targetY > p.y) and "down" or "up"
-                            end
-                        else
-                            -- Path is empty. Decide on the next action (find a new path or reposition).
-                            p.aiMoveTimer = p.aiMoveTimer - dt
-                            if p.aiMoveTimer <= 0 then
-                                local closestEnemy, shortestDistSq = nil, math.huge
-                                for _, enemy in ipairs(enemies) do
-                                    if enemy.hp > 0 then
-                                        local distSq = (enemy.x - p.x)^2 + (enemy.y - p.y)^2
-                                        if distSq < shortestDistSq then
-                                            shortestDistSq, closestEnemy = distSq, enemy
-                                        end
-                                    end
-                                end
-
-                                if closestEnemy then
-                                    -- First, try to generate a long-distance path.
-                                    p.ai_path = Systems.findPath(p, closestEnemy)
-
-                                    -- If no path was generated, we are likely close but not aligned.
-                                    if #p.ai_path == 0 then
-                                        local attackData = p.ai_last_attack_key and CharacterBlueprints[p.playerType].attacks[p.ai_last_attack_key]
-                                        local patternFunc = attackData and Systems.attacks.patterns[attackData.name]
-
-                                        -- If we have a pattern and we can't hit the target, try to reposition.
-                                        if patternFunc and not Systems.isTargetInPattern(p, patternFunc, {closestEnemy}) then
-                                            Systems.repositionForAttack(p, closestEnemy)
-                                        end
-                                    end
-                                end
-                                p.aiMoveTimer = 0.2 -- Reset AI decision timer (faster for more responsive repositioning)
-                            end
-                        end
-                    end
-                end
-            end
-        end
-
-        -- Third, handle queued attacks for the active player once they have stopped moving
-        if activePlayerIndex > 0 and players[activePlayerIndex] then
-            local currentPlayer = players[activePlayerIndex]
-            local isCurrentPlayerMoving = (currentPlayer.x ~= currentPlayer.targetX) or (currentPlayer.y ~= currentPlayer.targetY)
-
-            if not isCurrentPlayerMoving and currentPlayer.pendingAttackKey and not currentPlayer.statusEffects.careening then
-                local keyUsed = currentPlayer.pendingAttackKey
-                local attackData = CharacterBlueprints[currentPlayer.playerType].attacks[keyUsed]
-                local attackCost = (attackData and attackData.cost) or currentPlayer.speedStat
-
-                -- Only execute the queued attack if the player can afford it now that they've stopped moving.
-                if (currentPlayer.actionBarCurrent >= attackCost or currentPlayer.continuousAttack) then
-                    currentPlayer.ai_last_attack_key = keyUsed -- Remember the attack for the AI
-                    local wasContinuousBefore = currentPlayer.continuousAttack
-                    Systems.executeAttack(currentPlayer, keyUsed)
-
-                    local isStoppingContinuous = wasContinuousBefore and not currentPlayer.continuousAttack
-                    if not isStoppingContinuous then
-                        currentPlayer.actionBarCurrent = currentPlayer.actionBarCurrent - attackCost
-                        if currentPlayer.actionBarCurrent < 0 then currentPlayer.actionBarCurrent = 0 end
-                    end
-                    lastAttackTimestamp = love.timer.getTime() -- Record attack time
-                end
-                currentPlayer.pendingAttackKey = nil -- Clear pending attack
-            end
-        end
-
-        -- Update Enemy Movement and Attack Logic
-        for _, enemy in ipairs(enemies) do
-            -- Always find the closest player to determine facing direction
-            local targetPlayer = nil
-            local shortestDistanceSq = math.huge
-            if #players > 0 then
-                for _, player in ipairs(players) do
-                    if player.hp > 0 then
-                        local dx = player.x - enemy.x
-                        local dy = player.y - enemy.y
-                        local distSq = dx*dx + dy*dy
-                        if distSq < shortestDistanceSq then
-                            shortestDistanceSq = distSq
-                            targetPlayer = player
-                        end
-                    end
-                end
-            end
-
-            -- Update enemy's direction to face the closest player
-            if targetPlayer then
-                local dx = targetPlayer.x - enemy.x
-                local dy = targetPlayer.y - enemy.y
-                if math.abs(dx) > math.abs(dy) then
-                    enemy.lastDirection = (dx > 0) and "right" or "left"
-                else
-                    enemy.lastDirection = (dy > 0) and "down" or "up"
-                end
-            end
-
-            -- Enemy Movement (only if not stunned)
-            enemy.moveTimer = enemy.moveTimer - dt
-            local isEnemyMoving = (enemy.x ~= enemy.targetX) or (enemy.y ~= enemy.targetY)
-
-            -- Stunned enemies cannot move
-            if enemy.moveTimer <= 0 and not isEnemyMoving and not enemy.statusEffects.stunned and not enemy.statusEffects.paralyzed and not enemy.statusEffects.careening then
-                local newTargetX = enemy.x
-                local newTargetY = enemy.y
-
-                local movedAttempted = false
-                if enemy.ai_type == "melee_chaser" then
-                    if targetPlayer then
-                        local dx = targetPlayer.x - enemy.x
-                        local dy = targetPlayer.y - enemy.y
-                        local preferredMoveX, preferredMoveY = enemy.x, enemy.y
-                        local altMoveX, altMoveY = enemy.x, enemy.y
-
-                        if math.abs(dx) > math.abs(dy) then
-                            preferredMoveX = (dx > 0) and enemy.x + enemy.moveStep or enemy.x - enemy.moveStep
-                            altMoveY = (dy > 0) and enemy.y + enemy.moveStep or enemy.y - enemy.moveStep
-                        else
-                            preferredMoveY = (dy > 0) and enemy.y + enemy.moveStep or enemy.y - enemy.moveStep
-                            altMoveX = (dx > 0) and enemy.x + enemy.moveStep or enemy.x - enemy.moveStep
-                        end
-
-                        local potentialTargetX = math.max(0, math.min(preferredMoveX, windowWidth - enemy.size))
-                        local potentialTargetY = math.max(0, math.min(preferredMoveY, windowHeight - enemy.size))
-
-                        if not Systems.isTileOccupied(potentialTargetX, potentialTargetY, enemy.size, enemy) and (potentialTargetX ~= enemy.x or potentialTargetY ~= enemy.y) then
-                            newTargetX, newTargetY, movedAttempted = potentialTargetX, potentialTargetY, true
-                        else
-                            potentialTargetX = math.max(0, math.min(altMoveX, windowWidth - enemy.size))
-                            potentialTargetY = math.max(0, math.min(altMoveY, windowHeight - enemy.size))
-                            if not Systems.isTileOccupied(potentialTargetX, potentialTargetY, enemy.size, enemy) and (potentialTargetX ~= enemy.x or potentialTargetY ~= enemy.y) then
-                                newTargetX, newTargetY, movedAttempted = potentialTargetX, potentialTargetY, true
-                            end
-                        end
-                    end
-                elseif enemy.ai_type == "ranged_kiter" then
-                    if targetPlayer then
-                        local dx = targetPlayer.x - enemy.x
-                        local dy = targetPlayer.y - enemy.y
-                        local preferredMoveX, preferredMoveY = enemy.x, enemy.y
-
-                        -- Determine preferred move to get away
-                        if math.abs(dx) > math.abs(dy) then
-                            preferredMoveX = (dx > 0) and enemy.x - enemy.moveStep or enemy.x + enemy.moveStep
-                        else
-                            preferredMoveY = (dy > 0) and enemy.y - enemy.moveStep or enemy.y + enemy.moveStep
-                        end
-
-                        local potentialTargetX = math.max(0, math.min(preferredMoveX, windowWidth - enemy.size))
-                        local potentialTargetY = math.max(0, math.min(preferredMoveY, windowHeight - enemy.size))
-
-                        if not Systems.isTileOccupied(potentialTargetX, potentialTargetY, enemy.size, enemy) and (potentialTargetX ~= enemy.x or potentialTargetY ~= enemy.y) then
-                            newTargetX, newTargetY, movedAttempted = potentialTargetX, potentialTargetY, true
-                        end
-                    end
-                end
-
-                -- Default random movement if no specific AI action was taken
-                if not movedAttempted then
-                    if not targetPlayer then
-                        local directions = {"up", "down", "left", "right", "stay"}
-                        local chosenDirection = directions[math.random(1, #directions)]
-
-                        -- Clamp potential target to screen bounds for collision check
-                        if chosenDirection == "up" then newTargetY = enemy.y - enemy.moveStep
-                        elseif chosenDirection == "down" then newTargetY = enemy.y + enemy.moveStep
-                        elseif chosenDirection == "left" then newTargetX = enemy.x - enemy.moveStep
-                        elseif chosenDirection == "right" then newTargetX = enemy.x + enemy.moveStep
-                        end
-
-                        local potentialTargetX = math.max(0, math.min(newTargetX, windowWidth - enemy.size))
-                        local potentialTargetY = math.max(0, math.min(newTargetY, windowHeight - enemy.size))
-
-                        if not Systems.isTileOccupied(potentialTargetX, potentialTargetY, enemy.size, enemy) then
-                            enemy.targetX = potentialTargetX
-                            enemy.targetY = potentialTargetY
-                        end
-                    end
-                end
-
-                if movedAttempted then -- This will be true if AI logic determined a move
-                    enemy.targetX = newTargetX
-                    enemy.targetY = newTargetY
-                end
-                enemy.moveTimer = enemy.moveDelay -- Reset move timer
-            end
-
-            -- Smoothly move the enemy towards its target position (only if not stunned)
-            if not enemy.statusEffects.stunned and not enemy.statusEffects.paralyzed and not enemy.statusEffects.careening then
-                local enemyMoveAmount = enemy.speed * dt
-                local epsilon = 1
-
-                if enemy.x < enemy.targetX then
-                    enemy.x = enemy.x + enemyMoveAmount
-                    if enemy.x >= enemy.targetX - epsilon then enemy.x = enemy.targetX end
-                elseif enemy.x > enemy.targetX then
-                    enemy.x = enemy.x - enemyMoveAmount
-                    if enemy.x <= enemy.targetX + epsilon then enemy.x = enemy.targetX end
-                end
-
-                if enemy.y < enemy.targetY then
-                    enemy.y = enemy.y + enemyMoveAmount
-                    if enemy.y >= enemy.targetY - epsilon then enemy.y = enemy.targetY end
-                elseif enemy.y > enemy.targetY then
-                    enemy.y = enemy.y - enemyMoveAmount
-                    if enemy.y <= enemy.targetY + epsilon then enemy.y = enemy.targetY end
-                end
-            end
-
-            -- Enemy Attack (only if not stunned)
-            enemy.attackTimer = enemy.attackTimer - dt
-            if enemy.attackTimer <= 0 and not isEnemyMoving and enemy.actionBarCurrent >= enemy.speedStat and not enemy.statusEffects.stunned and not enemy.statusEffects.careening then
-                -- Use the data-driven attack system if not stunned
-                if enemy.attackName and Systems.enemyAttacks[enemy.attackName] then
-                    Systems.enemyAttacks[enemy.attackName](enemy)
-                end
-            end
-        end
-
         -- Update and manage attack effects (flashes and damage/healing application)
         for i = #attackEffects, 1, -1 do
             local effect = attackEffects[i]
@@ -768,8 +486,13 @@ function love.update(dt)
                                 local damageToHeal, _ = Systems.calculateFinalDamage(effect.attacker, target, effect.power, effect.critChanceOverride)
                                 Systems.applyHealToTarget(target, col, row, target.size, damageToHeal)
                                 elseif effect.isHeal then
-                                    -- Standard Heal
-                                Systems.applyHealToTarget(target, col, row, target.size, effect.power)
+                                    if Systems.applyHealToTarget(target, col, row, target.size, effect.power) then
+                                        -- If the heal was successful, check for special properties like cleansing.
+                                        if effect.specialProperties and effect.specialProperties.cleansesPoison then
+                                            -- Cleanse poison if the property is set
+                                            target.statusEffects.poison = nil
+                                        end
+                                    end
                                 else
                                 -- Standard Damage
                                 local finalDamage, isCrit = Systems.calculateFinalDamage(effect.attacker, target, effect.power, effect.critChanceOverride)
@@ -856,6 +579,9 @@ function love.update(dt)
                             if Systems.applyDamageToTarget(player, beam.x, beam.y, beam.size, damage, isCrit) then
                                 beamHit = true
                                 Systems.addAttackEffect(beam.x, beam.y, beam.size, beam.size, {1, 0, 0, 1}, 0, beam.attacker, 0, false, "player")
+                                if beam.statusEffect then
+                                    Systems.applyStatusEffect(player, beam.statusEffect)
+                                end
                                 break
                             end
                         end
@@ -888,6 +614,10 @@ function love.update(dt)
             end
         end
 
+-- Update AI Systems
+        AISystems.update_player_ai(dt, players, enemies, isAutopilotActive, activePlayerIndex)
+        AISystems.update_enemy_ai(dt, players, enemies)
+        lastAttackTimestamp = AISystems.update_queued_attacks(players, activePlayerIndex, lastAttackTimestamp)
 
         -- Check for dead players/enemies and remove them
         for i = #players, 1, -1 do
@@ -937,7 +667,7 @@ function love.update(dt)
                     -- Iterate through all living players and fill their action bars
                     for _, p in ipairs(players) do
                         if p.hp > 0 then
-                            p.actionBarCurrent = p.speedStat
+                            p.actionBarCurrent = p.actionBarMax
                         end
                     end
                 end
@@ -1020,8 +750,26 @@ function love.keypressed(key)
             return
         end
 
+        -- Toggle Autopilot
+        if key == "u" then
+            isAutopilotActive = not isAutopilotActive
+            if isAutopilotActive then
+                activePlayerIndex = 0 -- No player is controlled
+            else
+                -- If turning off autopilot, give control to the first player if they exist
+                if #players > 0 then
+                    activePlayerIndex = 1
+                    players[activePlayerIndex].flashTimer = Config.FLASH_DURATION
+                else
+                    activePlayerIndex = 0
+                end
+            end
+            return -- Consume key press
+        end
+
         -- Switch active player (now on ';')
         if key == ";" and #players > 0 then
+            isAutopilotActive = false -- Always turn off autopilot when cycling
             Systems.cycleActivePlayer()
             return -- Consume the key press
         end
@@ -1032,24 +780,24 @@ function love.keypressed(key)
             local isMoving = (currentPlayer.x ~= currentPlayer.targetX) or (currentPlayer.y ~= currentPlayer.targetY)
 
             local attackData = CharacterBlueprints[currentPlayer.playerType].attacks[key]
-            local attackCost = (attackData and attackData.cost) or currentPlayer.speedStat
+            local attackCost = attackData and attackData.cost
 
             -- Check if action bar is sufficient for the attack
-            if (currentPlayer.actionBarCurrent >= attackCost or currentPlayer.continuousAttack) and not currentPlayer.statusEffects.stunned and not currentPlayer.statusEffects.careening then
+            if attackCost and (currentPlayer.actionBarCurrent >= currentPlayer.actionBarMax or currentPlayer.continuousAttack) and not currentPlayer.statusEffects.stunned and not currentPlayer.statusEffects.careening then
                 if key == "j" or key == "k" or key == "l" then
                     if isMoving then
                         -- If moving, queue the attack to execute after movement
                         currentPlayer.pendingAttackKey = key
                     else
                         -- If not moving, execute immediately
-                        currentPlayer.ai_last_attack_key = key -- Remember the attack for the AI
+                        currentPlayer.ai_last_attack_key = key -- Remember the attack for the AI to repeat
                         local wasContinuousBefore = currentPlayer.continuousAttack
                         Systems.executeAttack(currentPlayer, key)
 
                         local isStoppingContinuous = wasContinuousBefore and not currentPlayer.continuousAttack
-                        if not isStoppingContinuous then
-                            currentPlayer.actionBarCurrent = currentPlayer.actionBarCurrent - attackCost
-                            if currentPlayer.actionBarCurrent < 0 then currentPlayer.actionBarCurrent = 0 end
+                        if not isStoppingContinuous then -- Don't reset bar if we just stopped a continuous attack
+                            currentPlayer.actionBarCurrent = 0
+                            currentPlayer.actionBarMax = attackCost
                         end
                         lastAttackTimestamp = love.timer.getTime() -- Record attack time
                     end
@@ -1177,7 +925,7 @@ function love.draw()
         end
 
         -- If this is the active player, draw a white border around it
-        if i == activePlayerIndex then
+        if not isAutopilotActive and i == activePlayerIndex then
             love.graphics.setColor(1, 1, 1, 1) -- White border (R, G, B, Alpha)
             love.graphics.setLineWidth(2)
             love.graphics.rectangle("line", p.x, p.y, p.size, p.size)
@@ -1205,6 +953,9 @@ function love.draw()
         elseif e.enemyType == "brawler" then
             love.graphics.setColor(0, 0, 0, 1) -- Black letter
             love.graphics.printf("B", e.x, e.y + e.size / 4, e.size, "center")
+        elseif e.enemyType == "punter" then
+            love.graphics.setColor(0, 0, 0, 1) -- Black letter
+            love.graphics.printf("P", e.x, e.y + e.size / 4, e.size, "center")
         end
 
         Systems.drawHealthBar(e) -- Draw health bar for enemy
@@ -1292,28 +1043,36 @@ function love.draw()
     love.graphics.print("Time: " .. string.format("%.0f", gameTimer), 10, 10) -- Display game timer (whole number)
     love.graphics.print("Active Player: " .. (activePlayerIndex > 0 and players[activePlayerIndex].playerType or "N/A"), 10, 30)
     love.graphics.print("Press WASD to move the active square", 10, 50)
-    love.graphics.print("Press ; to switch active square", 10, 70) -- Updated instruction
-    love.graphics.print("Press J (Primary), K (Secondary), or L (Tertiary) Attack", 10, 90) -- Updated instruction
+    love.graphics.print("Press ; to switch active square", 10, 70)
+    love.graphics.print("Press U to toggle Autopilot", 10, 90)
+    love.graphics.print("Press J (Primary), K (Secondary), or L (Tertiary) Attack", 10, 110)
 
     -- Print X/Y values and HP for all players
-    local yOffset = 110
+    local yOffset = 130
     for i, p in ipairs(players) do
-        love.graphics.print(string.format("P%d (%s): HP=%d/%d Atk=%d Def=%d AB=%.0f/%d", i, p.playerType, p.hp, p.maxHp, p.attackStat, p.defenseStat, p.actionBarCurrent, p.speedStat), 10, yOffset)
+        love.graphics.print(string.format("P%d (%s): HP=%d/%d Atk=%d Def=%d AB=%.1f/%.1f", i, p.playerType, p.hp, p.maxHp, p.attackStat, p.defenseStat, p.actionBarCurrent, p.actionBarMax), 10, yOffset)
         yOffset = yOffset + 20
     end
     -- Print X/Y values and HP for all enemies
     for i, e in ipairs(enemies) do
         local statusText = ""
         if e.statusEffects then
-            for effect, _ in pairs(e.statusEffects) do
+            for effect, data in pairs(e.statusEffects) do
                 statusText = statusText .. " (" .. string.upper(effect) .. ")"
             end
         end
-        love.graphics.print(string.format("%s %d: HP=%d/%d Atk=%d Def=%d AB=%.0f/%d%s", string.upper(e.enemyType), i, e.hp, e.maxHp, e.attackStat, e.defenseStat, e.actionBarCurrent, e.speedStat, statusText), 10, yOffset)
+        love.graphics.print(string.format("%s %d: HP=%d/%d Atk=%d Def=%d AB=%.1f/%.1f%s", string.upper(e.enemyType), i, e.hp, e.maxHp, e.attackStat, e.defenseStat, e.actionBarCurrent, e.actionBarMax, statusText), 10, yOffset)
         yOffset = yOffset + 20
     end
 
-    -- Display PAUSED message if game is paused
+    -- Display Autopilot status
+    if isAutopilotActive then
+        love.graphics.setColor(0, 1, 1, 1) -- Cyan
+        love.graphics.printf("AUTOPILOT ENGAGED", 0, love.graphics.getHeight() - 30, love.graphics.getWidth(), "center")
+        love.graphics.setColor(1, 1, 1, 1) -- Reset to white
+    end
+
+    -- Display PAUSED message and party select screen if game is paused
     if isPaused then
         -- Draw a semi-transparent background overlay
         love.graphics.setColor(0, 0, 0, 0.7)

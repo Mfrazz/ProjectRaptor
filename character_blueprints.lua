@@ -9,23 +9,23 @@ local CharacterBlueprints = {
         maxHp = 120,
         attackStat = 50,
         defenseStat = 50,
-        speedStat = 4,
+        attack_style = "melee",
         attacks = {
-            j = {name = "cyan_j", power = 50, cost = 2},
-            k = {name = "cyan_k", power = 20, cost = 2},
-            l = {name = "cyan_l", power = 40, cost = 4},
+            j = {name = "cyan_j", power = 40, cost = 2, type = "damage"},
+            k = {name = "cyan_k", power = 20, cost = 2, type = "damage"},
+            l = {name = "cyan_l", power = 40, cost = 4, type = "damage"},
         }
     },
     pinksquare = {
         color = {1, 0.4, 0.7},
-        maxHp = 100, -- BASE_INITIAL_HP
+        maxHp = 100,
         attackStat = 40,
         defenseStat = 50,
-        speedStat = 5,
+        attack_style = "melee",
         attacks = {
-            j = {name = "pink_j", power = 20, cost = 2},
-            k = {name = "pink_k", power = 50, cost = 2}, -- Power here represents heal amount
-            l = {name = "pink_l", power = 0, cost = 2},
+            j = {name = "pink_j", power = 20, cost = 2, type = "damage"},
+            k = {name = "pink_k", power = 40, cost = 5, type = "support"}, -- Power here represents heal amount
+            l = {name = "pink_l", power = 0, cost = 2, type = "support"},
         }
     },
     yellowsquare = {
@@ -33,11 +33,11 @@ local CharacterBlueprints = {
         maxHp = 60,
         attackStat = 60,
         defenseStat = 50,
-        speedStat = 3,
+        attack_style = "ranged",
         attacks = {
-            j = {name = "yellow_j", power = 20, cost = 1},
-            k = {name = "yellow_k", power = 20, cost = 2},
-            l = {name = "yellow_l", power = 0, cost = 3},
+            j = {name = "yellow_j", power = 20, cost = 1, type = "damage"},
+            k = {name = "yellow_k", power = 20, cost = 2, type = "damage"},
+            l = {name = "yellow_l", power = 0, cost = 3, type = "support"},
         }
     },
     stripedsquare = {
@@ -45,11 +45,11 @@ local CharacterBlueprints = {
         maxHp = 80,
         attackStat = 50,
         defenseStat = 50,
-        speedStat = 4,
+        attack_style = "melee",
         attacks = {
-            j = {name = "striped_j", power = 30, cost = 3},
-            k = {name = "striped_k", power = 0, cost = 2},
-            l = {name = "striped_l", power = 0, cost = 2},
+            j = {name = "striped_j", power = 30, cost = 3, type = "damage"},
+            k = {name = "striped_k", power = 0, cost = 2, type = "support"},
+            l = {name = "striped_l", power = 0, cost = 2, type = "support"},
         }
     },
     orangesquare = {
@@ -57,11 +57,11 @@ local CharacterBlueprints = {
         maxHp = 100,
         attackStat = 50,
         defenseStat = 50,
-        speedStat = 5,
+        attack_style = "melee",
         attacks = {
-            j = {name = "orange_j", power = 20, cost = 5}, -- Continuous attack, power is per hit
-            k = {name = "orange_k", power = 40, cost = 2},
-            l = {name = "orange_l", power = 0, cost = 1},
+            j = {name = "orange_j", power = 20, cost = 5, type = "damage"}, -- Continuous attack, power is per hit
+            k = {name = "orange_k", power = 40, cost = 2, type = "damage"},
+            l = {name = "orange_l", power = 0, cost = 1, type = "support"},
         }
     }
 }

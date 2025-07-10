@@ -6,6 +6,7 @@ local Systems = {}
 Systems.attacks = {} -- Sub-table to hold player attack implementations
 Systems.attackPatterns = {} -- Sub-table to hold hitbox generator functions
 Systems.enemyAttacks = {} -- Sub-table to hold enemy attack implementations
+Systems.enemyAttacks.patterns = {} -- Sub-table for enemy attack patterns
 
 --------------------------------------------------------------------------------
 -- LOGIC HELPER SYSTEMS
@@ -135,7 +136,7 @@ function Systems.applyHealToTarget(targetSquare, healTileX, healTileY, healTileS
     return false
 end
 
-function Systems.addAttackEffect(effectX, effectY, effectWidth, effectHeight, effectColor, delay, attacker, power, isHeal, targetType, critChanceOverride, statusEffect)
+function Systems.addAttackEffect(effectX, effectY, effectWidth, effectHeight, effectColor, delay, attacker, power, isHeal, targetType, critChanceOverride, statusEffect, specialProperties)
     table.insert(attackEffects, {
         x = effectX, y = effectY, width = effectWidth, height = effectHeight,
         color = effectColor,
@@ -149,7 +150,8 @@ function Systems.addAttackEffect(effectX, effectY, effectWidth, effectHeight, ef
         isHeal = isHeal,
         effectApplied = false,
         targetType = targetType,
-        statusEffect = statusEffect -- e.g., {type="stunned", duration=1}
+        statusEffect = statusEffect, -- e.g., {type="stunned", duration=1}
+        specialProperties = specialProperties
     })
 end
 
@@ -241,18 +243,9 @@ function Systems.findPath(startSquare, targetSquare)
     local path = {}
     if not startSquare or not targetSquare then return path end
 
-    local step = Config.MOVE_STEP
-    local maxTiles = 4 --how far can ai controlled player squares "see" when looking for enemies to attack?
-    local maxDist = maxTiles * step
-
     local dx = targetSquare.x - startSquare.x
     local dy = targetSquare.y - startSquare.y
-
-    -- Only generate a path if the target is within the 5x5 grid.
-    if math.abs(dx) > maxDist or math.abs(dy) > maxDist then
-        return path -- Return empty path if out of range.
-    end
-
+    local step = Config.MOVE_STEP
     local currentX, currentY = startSquare.x, startSquare.y
 
     -- Generate horizontal moves
@@ -342,71 +335,89 @@ end
 -- ENEMY ATTACK IMPLEMENTATIONS
 --------------------------------------------------------------------------------
 
-Systems.enemyAttacks.standard_melee = function(enemy)
-    -- This is the original 3x1 melee attack logic, now modular.
+Systems.enemyAttacks.patterns.standard_melee = function(enemy)
     local attackOriginX, attackOriginY, attackWidth, attackHeight
+    local step = Config.MOVE_STEP
 
     if enemy.lastDirection == "up" then
-        attackOriginX, attackOriginY, attackWidth, attackHeight = enemy.x - enemy.moveStep, enemy.y - enemy.moveStep, enemy.moveStep * 3, enemy.moveStep * 1
+        attackOriginX, attackOriginY, attackWidth, attackHeight = enemy.x - step, enemy.y - step, step * 3, step * 1
     elseif enemy.lastDirection == "down" then
-        attackOriginX, attackOriginY, attackWidth, attackHeight = enemy.x - enemy.moveStep, enemy.y + enemy.moveStep, enemy.moveStep * 3, enemy.moveStep * 1
+        attackOriginX, attackOriginY, attackWidth, attackHeight = enemy.x - step, enemy.y + step, step * 3, step * 1
     elseif enemy.lastDirection == "left" then
-        attackOriginX, attackOriginY, attackWidth, attackHeight = enemy.x - enemy.moveStep, enemy.y - enemy.moveStep, enemy.moveStep * 1, enemy.moveStep * 3
+        attackOriginX, attackOriginY, attackWidth, attackHeight = enemy.x - step, enemy.y - step, step * 1, step * 3
     elseif enemy.lastDirection == "right" then
-        attackOriginX, attackOriginY, attackWidth, attackHeight = enemy.x + enemy.moveStep, enemy.y - enemy.moveStep, enemy.moveStep * 1, enemy.moveStep * 3
+        attackOriginX, attackOriginY, attackWidth, attackHeight = enemy.x + step, enemy.y - step, step * 1, step * 3
     end
-
-    -- Check if any player is within the calculated attack area to trigger the attack
-    for _, player in ipairs(players) do
-        if player.hp > 0 then
-            local pCenterX, pCenterY = player.x + player.size / 2, player.y + player.size / 2
-            if pCenterX >= attackOriginX and pCenterX < attackOriginX + attackWidth and pCenterY >= attackOriginY and pCenterY < attackOriginY + attackHeight then
-                Systems.addAttackEffect(attackOriginX, attackOriginY, attackWidth, attackHeight, {1, 0, 0, 1}, 0, enemy, enemy.attackPower, false, "player")
-                enemy.actionBarCurrent = 0
-                enemy.attackTimer = enemy.attackDelay
-                return -- Attack executed, exit the function
-            end
-        end
-    end
+    return {{shape = {type = "rect", x = attackOriginX, y = attackOriginY, w = attackWidth, h = attackHeight}, delay = 0}}
 end
 
-Systems.enemyAttacks.archer_shot = function(enemy)
-    -- Fires a projectile if a player is aligned in the direction the archer is facing.
-    local targetPlayer = nil
-    local shortestDistanceSq = math.huge
-    if #players > 0 then
-        for _, player in ipairs(players) do
-            if player.hp > 0 then
-                local dx = player.x - enemy.x
-                local dy = player.y - enemy.y
-                local distSq = dx*dx + dy*dy
-                if distSq < shortestDistanceSq then
-                    shortestDistanceSq = distSq
-                    targetPlayer = player
-                end
-            end
-        end
+Systems.enemyAttacks.patterns.punter_spin = function(enemy)
+    local effects = {}
+    local directions = {
+        {dx = 1, dy = 0}, {dx = 1, dy = 1}, {dx = 0, dy = 1}, {dx = -1, dy = 1},
+        {dx = -1, dy = 0}, {dx = -1, dy = -1}, {dx = 0, dy = -1}, {dx = 1, dy = -1}
+    }
+    local delay = 0
+    for _, dir in ipairs(directions) do
+        local tileX = enemy.x + (dir.dx * Config.MOVE_STEP)
+        local tileY = enemy.y + (dir.dy * Config.MOVE_STEP)
+        table.insert(effects, {shape = {type = "rect", x = tileX, y = tileY, w = Config.SQUARE_SIZE, h = Config.SQUARE_SIZE}, delay = delay})
+        delay = delay + 0.02 -- A very short delay between each part of the spin
+    end
+    return effects
+end
+
+-- Helper function to execute enemy attacks based on a pattern.
+local function executeEnemyPatternAttack(enemy, attackData, patternFunc, statusEffect)
+    local effects = patternFunc(enemy)
+    local color = {1, 0, 0, 1} -- Red for damage
+    local targetType = "player"
+
+    for _, effectData in ipairs(effects) do
+        local s = effectData.shape
+        Systems.addAttackEffect(s.x, s.y, s.w, s.h, color, effectData.delay, enemy, attackData.power, false, targetType, nil, statusEffect)
     end
 
-    if not targetPlayer then return end
+    -- Reset action bar
+    enemy.actionBarCurrent = 0
+    enemy.actionBarMax = attackData.cost
+end
 
-    local isAligned = false
-    if enemy.lastDirection == "up" and targetPlayer.x == enemy.x and targetPlayer.y < enemy.y then isAligned = true
-    elseif enemy.lastDirection == "down" and targetPlayer.x == enemy.x and targetPlayer.y > enemy.y then isAligned = true
-    elseif enemy.lastDirection == "left" and targetPlayer.y == enemy.y and targetPlayer.x < enemy.x then isAligned = true
-    elseif enemy.lastDirection == "right" and targetPlayer.y == enemy.y and targetPlayer.x > enemy.x then isAligned = true
-    end
+Systems.enemyAttacks.standard_melee = function(enemy, attackData)
+    executeEnemyPatternAttack(enemy, attackData, Systems.enemyAttacks.patterns.standard_melee)
+end
 
-    if isAligned then
+Systems.enemyAttacks.archer_shot = function(enemy, attackData)
+    -- This implementation just fires the projectile. The targeting logic is in main.lua.
+    table.insert(beamProjectiles, {
+        x = enemy.x, y = enemy.y, size = Config.SQUARE_SIZE, moveStep = Config.MOVE_STEP, direction = enemy.lastDirection,
+        attacker = enemy, power = attackData.power,
+        moveDelay = 0.05, currentTimer = 0.05,
+        isEnemyProjectile = true -- Flag to identify enemy projectiles
+    })
+    enemy.actionBarCurrent = 0
+    enemy.actionBarMax = attackData.cost
+end
+
+Systems.enemyAttacks.punter_spin = function(enemy, attackData)
+    local status = {type = "careening", force = 2}
+    executeEnemyPatternAttack(enemy, attackData, Systems.enemyAttacks.patterns.punter_spin, status)
+end
+
+Systems.enemyAttacks.archer_barrage = function(enemy, attackData)
+    local directions = {"up", "down", "left", "right"}
+    local status = {type = "poison", duration = math.huge}
+    for _, dir in ipairs(directions) do
         table.insert(beamProjectiles, {
-            x = enemy.x, y = enemy.y, size = Config.SQUARE_SIZE, moveStep = Config.MOVE_STEP, direction = enemy.lastDirection,
-            attacker = enemy, power = enemy.attackPower,
+            x = enemy.x, y = enemy.y, size = Config.SQUARE_SIZE, moveStep = Config.MOVE_STEP, direction = dir,
+            attacker = enemy, power = attackData.power,
             moveDelay = 0.05, currentTimer = 0.05,
-            isEnemyProjectile = true -- Flag to identify enemy projectiles
+            isEnemyProjectile = true,
+            statusEffect = status
         })
-        enemy.actionBarCurrent = 0
-        enemy.attackTimer = enemy.attackDelay
     end
+    enemy.actionBarCurrent = 0
+    enemy.actionBarMax = attackData.cost
 end
 
 --------------------------------------------------------------------------------
@@ -471,7 +482,7 @@ function Systems.drawActionBar(square)
     local barWidth, barHeight, barYOffset = square.size, 3, square.size + 2 + 3 + 2
     love.graphics.setColor(0.3, 0, 0, 1)
     love.graphics.rectangle("fill", square.x, square.y + barYOffset, barWidth, barHeight)
-    local currentFillWidth = (square.actionBarCurrent / square.speedStat) * barWidth
+    local currentFillWidth = (square.actionBarCurrent / square.actionBarMax) * barWidth
     love.graphics.setColor(1, 0, 0, 1)
     love.graphics.rectangle("fill", square.x, square.y + barYOffset, currentFillWidth, barHeight)
 end

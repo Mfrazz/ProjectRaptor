@@ -18,9 +18,8 @@ local function createSquare(startX, startY, type, subType)
         square.maxHp = blueprint.maxHp
         square.attackStat = blueprint.attackStat
         square.defenseStat = blueprint.defenseStat
-        square.speedStat = blueprint.speedStat
         square.pendingAttackKey = nil -- For player: stores 'j' or 'k' or 'l' if attack is queued
-        square.ai_mode = "normal" -- The current AI mode for this player
+        square.attack_style = blueprint.attack_style
         square.ai_last_attack_key = nil -- The last attack used, for the AI to repeat
         square.aiMoveTimer = 0 -- Timer to control how often the AI makes a move decision
         square.ai_path = {} -- Stores a sequence of moves for the AI to follow
@@ -37,16 +36,13 @@ local function createSquare(startX, startY, type, subType)
         square.maxHp = blueprint.maxHp
         square.attackStat = blueprint.attackStat
         square.defenseStat = blueprint.defenseStat
-        square.speedStat = blueprint.speedStat
-        square.attackName = blueprint.attackName -- Store the name of the attack function
-        square.attackPower = blueprint.attackPower
         square.ai_type = blueprint.ai_type -- Store the AI type
         square.shakeTimer = 0
         square.shakeIntensity = 0
-        square.originalSpeedStat = blueprint.speedStat
     end
 
-    square.actionBarCurrent = square.speedStat -- Action bar starts full
+    square.actionBarMax = 1 -- Default time for the first action
+    square.actionBarCurrent = square.actionBarMax -- Action bar starts full
     square.hp = square.maxHp -- All squares start with full HP
 
     -- A scalable way to handle status effects
@@ -63,8 +59,6 @@ local function createSquare(startX, startY, type, subType)
         local blueprint = EnemyBlueprints[subType]
         square.moveDelay = blueprint.moveDelay
         square.moveTimer = math.random() * square.moveDelay
-        square.attackDelay = blueprint.attackDelay
-        square.attackTimer = math.random() * square.attackDelay
     end
 
     return square
