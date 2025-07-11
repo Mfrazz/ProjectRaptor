@@ -1,6 +1,7 @@
 -- renderer.lua
 -- Contains all drawing logic for the game.
 
+local Camera = require("modules.camera")
 local Renderer = {}
 
 --------------------------------------------------------------------------------
@@ -26,15 +27,107 @@ local function drawActionBar(square)
     love.graphics.rectangle("fill", square.x, square.y + barYOffset, currentFillWidth, barHeight)
 end
 
+local function draw_entity(entity, world, is_active_player)
+    love.graphics.push()
+    -- Check for the 'shake' component
+    if entity.components.shake then
+        local offsetX = math.random(-entity.components.shake.intensity, entity.components.shake.intensity)
+        local offsetY = math.random(-entity.components.shake.intensity, entity.components.shake.intensity)
+        love.graphics.translate(offsetX, offsetY)
+    end
+
+    love.graphics.setColor(entity.color) -- Set the square's color
+    love.graphics.rectangle("fill", entity.x, entity.y, entity.size, entity.size)
+
+    -- Draw status effect overlays
+    if entity.statusEffects.stunned then
+        love.graphics.setColor(0.5, 0, 0.5, 0.5) -- Semi-transparent purple
+        love.graphics.rectangle("fill", entity.x, entity.y, entity.size, entity.size)
+    elseif entity.statusEffects.paralyzed then
+        love.graphics.setColor(1, 1, 0, 0.4) -- Semi-transparent yellow
+        love.graphics.rectangle("fill", entity.x, entity.y, entity.size, entity.size)
+    elseif entity.statusEffects.poison then
+        -- Pulsating pink tint for poison
+        local pulse = (math.sin(love.timer.getTime() * 8) + 1) / 2 -- Fast pulse (0 to 1)
+        local alpha = 0.2 + pulse * 0.3 -- Alpha from 0.2 to 0.5
+        love.graphics.setColor(1, 0.4, 0.7, alpha) -- Pink
+        love.graphics.rectangle("fill", entity.x, entity.y, entity.size, entity.size)
+    end
+
+    -- Special drawing logic for specific entity types
+    if entity.playerType == "stripedsquare" then
+        -- Use a scissor to ensure stripes don't draw outside the square
+        love.graphics.setScissor(entity.x, entity.y, entity.size, entity.size)
+        love.graphics.setColor(1, 1, 1, 1) -- White stripes
+        love.graphics.setLineWidth(2)
+        for i = -entity.size, entity.size, 4 do
+            love.graphics.line(entity.x + i, entity.y, entity.x + i + entity.size, entity.y + entity.size)
+        end
+        love.graphics.setLineWidth(1)
+        love.graphics.setScissor() -- Disable the scissor
+    elseif entity.enemyType == "archer" then
+        love.graphics.setColor(0, 0, 0, 1) -- Black letter
+        love.graphics.printf("A", entity.x, entity.y + entity.size / 4, entity.size, "center")
+    elseif entity.enemyType == "brawler" then
+        love.graphics.setColor(0, 0, 0, 1) -- Black letter
+        love.graphics.printf("B", entity.x, entity.y + entity.size / 4, entity.size, "center")
+    elseif entity.enemyType == "punter" then
+        love.graphics.setColor(0, 0, 0, 1) -- Black letter
+        love.graphics.printf("P", entity.x, entity.y + entity.size / 4, entity.size, "center")
+    end
+
+    -- Draw shield effect for Striped L-Ability
+    if entity.shieldEffectTimer and entity.shieldEffectTimer > 0 then
+        love.graphics.setColor(0, 1, 0, 0.4) -- Semi-transparent green
+        love.graphics.rectangle("fill", entity.x, entity.y, entity.size, entity.size)
+    end
+
+    -- Draw shield effect for Purple K-Ability
+    if entity.components.shielded then
+        love.graphics.setColor(0.7, 0.7, 1, 0.8) -- Light blue
+        love.graphics.setLineWidth(2)
+        love.graphics.rectangle("line", entity.x - 2, entity.y - 2, entity.size + 4, entity.size + 4)
+        love.graphics.setLineWidth(1)
+    end
+
+    drawHealthBar(entity)
+    drawActionBar(entity)
+
+    -- Draw flash effect if active and flashing (only for players)
+    if entity.type == "player" and entity.components.flash then
+        local flash = entity.components.flash
+        local alpha = flash.timer / Config.FLASH_DURATION -- Fade out effect
+        love.graphics.setColor(1, 1, 1, alpha) -- White flash
+        local flashX = entity.x - entity.moveStep
+        local flashY = entity.y - entity.moveStep
+        local flashWidth = entity.size * 3
+        local flashHeight = entity.size * 3
+        love.graphics.rectangle("fill", flashX, flashY, flashWidth, flashHeight)
+    end
+
+    -- If this is the active player, draw a white border around it
+    if is_active_player then
+        love.graphics.setColor(1, 1, 1, 1) -- White border (R, G, B, Alpha)
+        love.graphics.setLineWidth(2)
+        love.graphics.rectangle("line", entity.x, entity.y, entity.size, entity.size)
+        love.graphics.setLineWidth(1) -- Reset line width
+    end
+
+    love.graphics.pop()
+end
+
 --------------------------------------------------------------------------------
 -- MAIN DRAW FUNCTION
 --------------------------------------------------------------------------------
 
 -- This single function draws the entire game state.
 -- It receives a `gameState` table containing everything it needs to render.
-function Renderer.draw_frame(gameState)
+function Renderer.draw_frame(world)
+    -- Apply the camera transform. All subsequent drawing will be in "world space".
+    Camera:apply()
+
     -- Draw afterimage effects
-    for _, a in ipairs(gameState.afterimageEffects) do
+    for _, a in ipairs(world.afterimageEffects) do
         local alpha = (a.lifetime / a.initialLifetime) * 0.5 -- Max 50% transparent
         love.graphics.setColor(a.color[1], a.color[2], a.color[3], alpha)
 
@@ -58,127 +151,18 @@ function Renderer.draw_frame(gameState)
     end
 
     -- Draw all players
-    for i, p in ipairs(gameState.players) do
-        love.graphics.push()
-        if p.shakeTimer > 0 then
-            local offsetX = math.random(-p.shakeIntensity, p.shakeIntensity)
-            local offsetY = math.random(-p.shakeIntensity, p.shakeIntensity)
-            love.graphics.translate(offsetX, offsetY)
-        end
-
-        love.graphics.setColor(p.color) -- Set the square's color
-        love.graphics.rectangle("fill", p.x, p.y, p.size, p.size)
-
-        -- Draw status effect overlays for players
-        if p.statusEffects.stunned then
-            love.graphics.setColor(0.5, 0, 0.5, 0.5) -- Semi-transparent purple
-            love.graphics.rectangle("fill", p.x, p.y, p.size, p.size)
-        elseif p.statusEffects.paralyzed then
-            love.graphics.setColor(1, 1, 0, 0.4) -- Semi-transparent yellow
-            love.graphics.rectangle("fill", p.x, p.y, p.size, p.size)
-        elseif p.statusEffects.poison then
-            -- Pulsating pink tint for poison
-            local pulse = (math.sin(love.timer.getTime() * 8) + 1) / 2 -- Fast pulse (0 to 1)
-            local alpha = 0.2 + pulse * 0.3 -- Alpha from 0.2 to 0.5
-            love.graphics.setColor(1, 0.4, 0.7, alpha) -- Pink
-            love.graphics.rectangle("fill", p.x, p.y, p.size, p.size)
-        end
-
-        -- Special drawing logic for stripedsquare
-        if p.playerType == "stripedsquare" then
-            -- Use a scissor to ensure stripes don't draw outside the square
-            love.graphics.setScissor(p.x, p.y, p.size, p.size)
-            love.graphics.setColor(1, 1, 1, 1) -- White stripes
-            love.graphics.setLineWidth(2)
-            for i = -p.size, p.size, 4 do
-                love.graphics.line(p.x + i, p.y, p.x + i + p.size, p.y + p.size)
-            end
-            love.graphics.setLineWidth(1)
-            -- Disable the scissor so other things can be drawn normally
-            love.graphics.setScissor()
-        end
-
-        -- Draw shield effect for Striped L-Ability
-        if p.shieldEffectTimer and p.shieldEffectTimer > 0 then
-            p.shieldEffectTimer = p.shieldEffectTimer - love.timer.getDelta()
-            love.graphics.setColor(0, 1, 0, 0.4) -- Semi-transparent green
-            love.graphics.rectangle("fill", p.x, p.y, p.size, p.size)
-        end
-
-        drawHealthBar(p) -- Draw health bar for player
-        drawActionBar(p) -- Draw action bar for player
-
-        -- Draw flash effect if active and flashing
-        if p.flashTimer > 0 then
-            local alpha = p.flashTimer / Config.FLASH_DURATION -- Fade out effect
-            love.graphics.setColor(1, 1, 1, alpha) -- White flash
-
-            -- Calculate 3x3 grid behind the square for the flash
-            local flashX = p.x - p.moveStep
-            local flashY = p.y - p.moveStep
-            local flashWidth = p.size * 3
-            local flashHeight = p.size * 3
-
-            love.graphics.rectangle("fill", flashX, flashY, flashWidth, flashHeight)
-        end
-
-        -- If this is the active player, draw a white border around it
-        if not gameState.isAutopilotActive and i == gameState.activePlayerIndex then
-            love.graphics.setColor(1, 1, 1, 1) -- White border (R, G, B, Alpha)
-            love.graphics.setLineWidth(2)
-            love.graphics.rectangle("line", p.x, p.y, p.size, p.size)
-            love.graphics.setLineWidth(1) -- Reset line width
-        end
-
-        love.graphics.pop()
+    for i, p in ipairs(world.players) do
+        local is_active = not world.isAutopilotActive and i == world.activePlayerIndex
+        draw_entity(p, world, is_active)
     end
 
     -- Draw all enemies
-    for _, e in ipairs(gameState.enemies) do
-        love.graphics.push()
-        if e.shakeTimer > 0 then
-            local offsetX = math.random(-e.shakeIntensity, e.shakeIntensity)
-            local offsetY = math.random(-e.shakeIntensity, e.shakeIntensity)
-            love.graphics.translate(offsetX, offsetY)
-        end
-
-        love.graphics.setColor(e.color) -- Set the enemy's color (light grey)
-        love.graphics.rectangle("fill", e.x, e.y, e.size, e.size)
-
-        if e.enemyType == "archer" then
-            love.graphics.setColor(0, 0, 0, 1) -- Black letter
-            love.graphics.printf("A", e.x, e.y + e.size / 4, e.size, "center")
-        elseif e.enemyType == "brawler" then
-            love.graphics.setColor(0, 0, 0, 1) -- Black letter
-            love.graphics.printf("B", e.x, e.y + e.size / 4, e.size, "center")
-        elseif e.enemyType == "punter" then
-            love.graphics.setColor(0, 0, 0, 1) -- Black letter
-            love.graphics.printf("P", e.x, e.y + e.size / 4, e.size, "center")
-        end
-
-        drawHealthBar(e) -- Draw health bar for enemy
-        drawActionBar(e) -- Draw action bar for enemy
-        -- Draw status effect overlays for enemies
-        if e.statusEffects.stunned then
-            love.graphics.setColor(0.5, 0, 0.5, 0.5) -- Semi-transparent purple
-            love.graphics.rectangle("fill", e.x, e.y, e.size, e.size)
-        elseif e.statusEffects.paralyzed then
-            love.graphics.setColor(1, 1, 0, 0.4) -- Semi-transparent yellow
-            love.graphics.rectangle("fill", e.x, e.y, e.size, e.size)
-        elseif e.statusEffects.poison then
-            -- Pulsating pink tint for poison
-            local pulse = (math.sin(love.timer.getTime() * 8) + 1) / 2 -- Fast pulse (0 to 1)
-            local alpha = 0.2 + pulse * 0.3 -- Alpha from 0.2 to 0.5
-            love.graphics.setColor(1, 0.4, 0.7, alpha) -- Pink
-            love.graphics.rectangle("fill", e.x, e.y, e.size, e.size)
-        end
-
-        love.graphics.pop()
+    for _, e in ipairs(world.enemies) do
+        draw_entity(e, world, false) -- Enemies are never the active player
     end
 
     -- Draw active attack effects (flashing tiles)
-    for i = #gameState.attackEffects, 1, -1 do -- Iterate backwards to safely remove elements
-        local effect = gameState.attackEffects[i]
+    for _, effect in ipairs(world.attackEffects) do
         -- Only draw if the initial delay has passed
         if effect.initialDelay <= 0 then
             -- Calculate alpha for flashing effect (e.g., fade out)
@@ -200,13 +184,13 @@ function Renderer.draw_frame(gameState)
     end
 
     -- Draw Yellowsquare's beam projectiles
-    for _, beam in ipairs(gameState.beamProjectiles) do
+    for _, beam in ipairs(world.projectiles) do
         love.graphics.setColor(1, 0, 0, 1) -- Red color for the beam
         love.graphics.rectangle("fill", beam.x, beam.y, beam.size, beam.size)
     end
 
     -- Draw particle effects
-    for _, p in ipairs(gameState.particleEffects) do
+    for _, p in ipairs(world.particleEffects) do
         -- Fade out the particle as its lifetime decreases
         local alpha = (p.lifetime / p.initialLifetime)
         love.graphics.setColor(p.color[1], p.color[2], p.color[3], alpha)
@@ -215,14 +199,14 @@ function Renderer.draw_frame(gameState)
 
     -- Draw damage popups
     love.graphics.setColor(1, 1, 1, 1) -- Reset color
-    for _, p in ipairs(gameState.damagePopups) do
+    for _, p in ipairs(world.damagePopups) do
         local alpha = (p.lifetime / p.initialLifetime)
         love.graphics.setColor(p.color[1], p.color[2], p.color[3], alpha)
         love.graphics.print(p.text, p.x, p.y)
     end
 
     -- Draw player switch "comet" effect
-    for _, effect in ipairs(gameState.switchPlayerEffects) do
+    for _, effect in ipairs(world.switchPlayerEffects) do
         -- Draw trail
         for _, p in ipairs(effect.trail) do
             local alpha = p.lifetime / p.initialLifetime
@@ -235,43 +219,82 @@ function Renderer.draw_frame(gameState)
         love.graphics.circle("fill", effect.currentX, effect.currentY, 6)
     end
 
+    -- Draw grapple lines
+    if #world.grappleLineEffects > 0 then
+        love.graphics.setColor(0.6, 0.3, 0.1, 1) -- Brown color for the grapple line
+        love.graphics.setLineWidth(2)
+        for _, effect in ipairs(world.grappleLineEffects) do
+            if effect.attacker and effect.target then
+                local x1 = effect.attacker.x + effect.attacker.size / 2
+                local y1 = effect.attacker.y + effect.attacker.size / 2
+                local x2 = effect.target.x + effect.target.size / 2
+                local y2 = effect.target.y + effect.target.size / 2
+                love.graphics.line(x1, y1, x2, y2)
+            end
+        end
+        love.graphics.setLineWidth(1) -- Reset line width
+    end
+
+    -- Revert the camera transform. All subsequent drawing will be in "screen space" (for UI).
+    Camera:revert()
+
 
     -- Display instructions and square coordinates
     love.graphics.setColor(1, 1, 1, 1) -- Set color back to white for text
-    love.graphics.print("Time: " .. string.format("%.0f", gameState.gameTimer), 10, 10) -- Display game timer (whole number)
-    love.graphics.print("Active Player: " .. (gameState.activePlayerIndex > 0 and gameState.players[gameState.activePlayerIndex].playerType or "N/A"), 10, 30)
+    love.graphics.print("Time: " .. string.format("%.0f", world.gameTimer), 10, 10) -- Display game timer (whole number)
+    love.graphics.print("Active Player: " .. (world.activePlayerIndex > 0 and world.players[world.activePlayerIndex].playerType or "N/A"), 10, 30)
     love.graphics.print("Press WASD to move the active square", 10, 50)
     love.graphics.print("Press ; to switch active square", 10, 70)
     love.graphics.print("Press U to toggle Autopilot", 10, 90)
     love.graphics.print("Press J (Primary), K (Secondary), or L (Tertiary) Attack", 10, 110)
 
+    -- Draw queued attack text in the top right
+    do
+        local queuedAttackY = 10
+        love.graphics.setColor(0, 1, 0, 1) -- Green text
+        for _, p in ipairs(world.players) do
+            if p.pendingAttackKey then
+                local attackData = CharacterBlueprints[p.playerType].attacks[p.pendingAttackKey]
+                if attackData then
+                    local text = string.format("%s Queued: %s", p.playerType, attackData.name)
+                    local textWidth = love.graphics.getFont():getWidth(text)
+                    love.graphics.print(text, love.graphics.getWidth() - textWidth - 10, queuedAttackY)
+                    queuedAttackY = queuedAttackY + 20
+                end
+            end
+        end
+    end
+
+    -- Reset color to white for the rest of the UI text
+    love.graphics.setColor(1, 1, 1, 1)
+
     -- Print X/Y values and HP for all players
     local yOffset = 130
-    for i, p in ipairs(gameState.players) do
-        love.graphics.print(string.format("P%d (%s): HP=%d/%d Atk=%d Def=%d AB=%.1f/%.1f", i, p.playerType, p.hp, p.maxHp, p.attackStat, p.defenseStat, p.actionBarCurrent, p.actionBarMax), 10, yOffset)
+    for i, p in ipairs(world.players) do
+        love.graphics.print(string.format("P%d (%s): HP=%d/%d Atk=%d Def=%d AB=%.1f/%.1f", i, p.playerType, p.hp, p.maxHp, p.finalAttackStat or 0, p.finalDefenseStat or 0, p.actionBarCurrent, p.actionBarMax), 10, yOffset)
         yOffset = yOffset + 20
     end
     -- Print X/Y values and HP for all enemies
-    for i, e in ipairs(gameState.enemies) do
+    for i, e in ipairs(world.enemies) do
         local statusText = ""
         if e.statusEffects then
             for effect, data in pairs(e.statusEffects) do
                 statusText = statusText .. " (" .. string.upper(effect) .. ")"
             end
         end
-        love.graphics.print(string.format("%s %d: HP=%d/%d Atk=%d Def=%d AB=%.1f/%.1f%s", string.upper(e.enemyType), i, e.hp, e.maxHp, e.attackStat, e.defenseStat, e.actionBarCurrent, e.actionBarMax, statusText), 10, yOffset)
+        love.graphics.print(string.format("%s %d: HP=%d/%d Atk=%d Def=%d AB=%.1f/%.1f%s", string.upper(e.enemyType), i, e.hp, e.maxHp, e.finalAttackStat or 0, e.finalDefenseStat or 0, e.actionBarCurrent, e.actionBarMax, statusText), 10, yOffset)
         yOffset = yOffset + 20
     end
 
     -- Display Autopilot status
-    if gameState.isAutopilotActive then
+    if world.isAutopilotActive then
         love.graphics.setColor(0, 1, 1, 1) -- Cyan
         love.graphics.printf("AUTOPILOT ENGAGED", 0, love.graphics.getHeight() - 30, love.graphics.getWidth(), "center")
         love.graphics.setColor(1, 1, 1, 1) -- Reset to white
     end
 
     -- Display PAUSED message and party select screen if game is paused
-    if gameState.isPaused then
+    if world.gameState == "party_select" then
         -- Draw a semi-transparent background overlay
         love.graphics.setColor(0, 0, 0, 0.7)
         love.graphics.rectangle("fill", 0, 0, love.graphics.getWidth(), love.graphics.getHeight())
@@ -287,7 +310,7 @@ function Renderer.draw_frame(gameState)
 
         for y = 1, 3 do
             for x = 1, 3 do
-                local playerType = gameState.characterGrid[y][x]
+                local playerType = world.characterGrid[y][x]
                 if playerType then
                     local squareDisplaySize = gridSize * 0.9
                     local squareX = gridStartX + (x - 1) * gridSize
@@ -309,7 +332,7 @@ function Renderer.draw_frame(gameState)
                     end
 
                     -- Draw selection highlight
-                    if gameState.selectedSquare and gameState.selectedSquare.x == x and gameState.selectedSquare.y == y then
+                    if world.selectedSquare and world.selectedSquare.x == x and world.selectedSquare.y == y then
                         love.graphics.setColor(0, 1, 0, 1) -- Green highlight
                         love.graphics.setLineWidth(3)
                         love.graphics.rectangle("line", squareX, squareY, squareDisplaySize, squareDisplaySize)
@@ -322,8 +345,11 @@ function Renderer.draw_frame(gameState)
         -- Draw the cursor
         love.graphics.setColor(1, 1, 0, 1) -- Yellow cursor
         love.graphics.setLineWidth(3)
-        love.graphics.rectangle("line", gridStartX + (gameState.cursorPos.x - 1) * gridSize, gridStartY + (gameState.cursorPos.y - 1) * gridSize, gridSize * 0.9, gridSize * 0.9)
+        love.graphics.rectangle("line", gridStartX + (world.cursorPos.x - 1) * gridSize, gridStartY + (world.cursorPos.y - 1) * gridSize, gridSize * 0.9, gridSize * 0.9)
         love.graphics.setLineWidth(1)
+
+        -- Reset color to white after drawing the UI to prevent tinting the whole screen
+        love.graphics.setColor(1, 1, 1, 1)
     end
 end
 

@@ -8,6 +8,8 @@ local Config = {
     FLASH_DURATION = 0.2,
     ATTACK_COOLDOWN_GLOBAL = 0.1,
     BASE_CRIT_CHANCE = 0.05,
+    VIRTUAL_WIDTH = 800,
+    VIRTUAL_HEIGHT = 600,
 }
 
 return Config
