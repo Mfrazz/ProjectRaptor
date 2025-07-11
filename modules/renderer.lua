@@ -239,18 +239,42 @@ function Renderer.draw_frame(world)
     Camera:revert()
 
 
-    -- Display instructions and square coordinates
-    love.graphics.setColor(1, 1, 1, 1) -- Set color back to white for text
-    love.graphics.print("Time: " .. string.format("%.0f", world.gameTimer), 10, 10) -- Display game timer (whole number)
-    love.graphics.print("Active Player: " .. (world.activePlayerIndex > 0 and world.players[world.activePlayerIndex].playerType or "N/A"), 10, 30)
-    love.graphics.print("Press WASD to move the active square", 10, 50)
-    love.graphics.print("Press ; to switch active square", 10, 70)
-    love.graphics.print("Press U to toggle Autopilot", 10, 90)
-    love.graphics.print("Press J (Primary), K (Secondary), or L (Tertiary) Attack", 10, 110)
+    -- Set the custom font for all UI text. If GameFont is nil, it uses the default.
+    if GameFont then
+        love.graphics.setFont(GameFont)
+    end
 
-    -- Draw queued attack text in the top right
+    -- UI Drawing
+    love.graphics.setColor(1, 1, 1, 1) -- Set color back to white for text
+
+    -- Instructions (Top-Left)
+    local instructions = {
+        "WASD to move",
+        "; to switch",
+        "U for Autopilot",
+        "J/K/L to Attack"
+    }
+    local yPos = 10
+    for _, line in ipairs(instructions) do
+        love.graphics.print(line, 10, yPos)
+        yPos = yPos + 20
+    end
+
+    -- Player Stats (Below Instructions)
+    local yOffset = yPos -- Start right after instructions
+    for i, p in ipairs(world.players) do
+        love.graphics.print(string.format("P%d (%s): HP=%d/%d Atk=%d Def=%d", i, p.playerType, p.hp, p.maxHp, p.finalAttackStat or 0, p.finalDefenseStat or 0), 10, yOffset)
+        yOffset = yOffset + 20
+    end
+
+    -- Timer (Top-Right)
+    local timerText = "Time: " .. string.format("%.0f", world.gameTimer)
+    local timerTextWidth = love.graphics.getFont():getWidth(timerText)
+    love.graphics.print(timerText, Config.VIRTUAL_WIDTH - timerTextWidth - 10, 10)
+
+    -- Queued Attacks (Top-Right, below timer)
     do
-        local queuedAttackY = 10
+        local queuedAttackY = 30 -- Start below the timer
         love.graphics.setColor(0, 1, 0, 1) -- Green text
         for _, p in ipairs(world.players) do
             if p.pendingAttackKey then
@@ -258,7 +282,7 @@ function Renderer.draw_frame(world)
                 if attackData then
                     local text = string.format("%s Queued: %s", p.playerType, attackData.name)
                     local textWidth = love.graphics.getFont():getWidth(text)
-                    love.graphics.print(text, love.graphics.getWidth() - textWidth - 10, queuedAttackY)
+                    love.graphics.print(text, Config.VIRTUAL_WIDTH - textWidth - 10, queuedAttackY)
                     queuedAttackY = queuedAttackY + 20
                 end
             end
@@ -267,24 +291,6 @@ function Renderer.draw_frame(world)
 
     -- Reset color to white for the rest of the UI text
     love.graphics.setColor(1, 1, 1, 1)
-
-    -- Print X/Y values and HP for all players
-    local yOffset = 130
-    for i, p in ipairs(world.players) do
-        love.graphics.print(string.format("P%d (%s): HP=%d/%d Atk=%d Def=%d AB=%.1f/%.1f", i, p.playerType, p.hp, p.maxHp, p.finalAttackStat or 0, p.finalDefenseStat or 0, p.actionBarCurrent, p.actionBarMax), 10, yOffset)
-        yOffset = yOffset + 20
-    end
-    -- Print X/Y values and HP for all enemies
-    for i, e in ipairs(world.enemies) do
-        local statusText = ""
-        if e.statusEffects then
-            for effect, data in pairs(e.statusEffects) do
-                statusText = statusText .. " (" .. string.upper(effect) .. ")"
-            end
-        end
-        love.graphics.print(string.format("%s %d: HP=%d/%d Atk=%d Def=%d AB=%.1f/%.1f%s", string.upper(e.enemyType), i, e.hp, e.maxHp, e.finalAttackStat or 0, e.finalDefenseStat or 0, e.actionBarCurrent, e.actionBarMax, statusText), 10, yOffset)
-        yOffset = yOffset + 20
-    end
 
     -- Display Autopilot status
     if world.isAutopilotActive then

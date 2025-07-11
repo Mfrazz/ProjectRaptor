@@ -33,6 +33,7 @@ local ActivePlayerSyncSystem = require("systems/active_player_sync_system")
 local InputHandler = require("modules.input_handler")
 
 world = World.new() -- The single instance of our game world
+GameFont = nil -- Will hold our loaded font
 
 local canvas
 local scale = 1
@@ -66,7 +67,13 @@ local update_systems = {
 -- It's used to initialize game variables and load assets.
 function love.load()
     love.graphics.setDefaultFilter("nearest", "nearest") -- Ensures crisp scaling
+
+    -- Load the custom font. Replace with your actual font file and its native size.
+    -- For pixel fonts, using the intended size (e.g., 8, 16) is crucial for sharpness.
+    GameFont = love.graphics.newFont("assets/Px437_DOS-V_TWN16.ttf", 16)
+
     canvas = love.graphics.newCanvas(Config.VIRTUAL_WIDTH, Config.VIRTUAL_HEIGHT)
+    canvas:setFilter("nearest", "nearest")
 
     -- Initialize factories and modules that need a reference to the world
     local EffectFactory = require("modules.effect_factory")
@@ -176,8 +183,8 @@ function love.draw()
     -- 2. Draw the canvas to the screen, scaled and centered to fit the window.
     -- This creates letterboxing/pillarboxing as needed.
     local w, h = love.graphics.getDimensions()
-    local canvasX = (w - Config.VIRTUAL_WIDTH * scale) / 2
-    local canvasY = (h - Config.VIRTUAL_HEIGHT * scale) / 2
+    local canvasX = math.floor((w - Config.VIRTUAL_WIDTH * scale) / 2)
+    local canvasY = math.floor((h - Config.VIRTUAL_HEIGHT * scale) / 2)
 
     love.graphics.draw(canvas, canvasX, canvasY, 0, scale, scale)
 end
