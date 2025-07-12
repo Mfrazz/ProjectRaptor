@@ -32,7 +32,7 @@ PlayerAttacks.drapion_j = function(square, power, world)
     local effects = AttackPatterns.drapion_j(square)
     for _, effectData in ipairs(effects) do
         local s = effectData.shape
-        EffectFactory.addAttackEffect(s.x, s.y, s.w, s.h, {1, 0, 0, 1}, effectData.delay, square, power, false, "enemy", nil, {type = "careening", force = 10})
+        EffectFactory.addAttackEffect(s.x, s.y, s.w, s.h, {1, 0, 0, 1}, effectData.delay, square, power, false, "enemy", nil, {type = "careening", force = 10, useAttackerDirection = true})
     end
 end
 
@@ -527,7 +527,7 @@ end
 
 -- Pidgeot K: Gust - A cone of wind that damages and pushes enemies.
 PlayerAttacks.pidgeot_k = function(square, power, world)
-    local status = {type = "careening", force = 2, attacker = square}
+    local status = {type = "careening", force = 2, attacker = square, useAttackerDirection = true}
     -- Use a cone-shaped pattern similar to Drapion's J attack
     executePatternAttack(square, power, AttackPatterns.drapion_j, false, "enemy", status)
 end

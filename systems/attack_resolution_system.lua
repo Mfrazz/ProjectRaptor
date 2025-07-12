@@ -46,15 +46,15 @@ function AttackResolutionSystem.update(dt, world)
                                     attacker = effect.attacker,
                                     -- Direction is calculated below
                                 }
-
-                                if statusCopy.type == "careening" then
-                                    -- For careen, direction should be away from the effect's center.
+                                
+                                -- Default direction is the attacker's facing. This is correct for most status effects and directional pushes.
+                                statusCopy.direction = effect.attacker.lastDirection
+                                
+                                -- For "explosive" careening effects (like from a ripple), we override the direction to be away from the effect's center.
+                                if statusCopy.type == "careening" and not effect.statusEffect.useAttackerDirection then
                                     local effectCenterX, effectCenterY = effect.x + effect.width / 2, effect.y + effect.height / 2
                                     local dx, dy = target.x - effectCenterX, target.y - effectCenterY
                                     statusCopy.direction = (math.abs(dx) > math.abs(dy)) and ((dx > 0) and "right" or "left") or ((dy > 0) and "down" or "up")
-                                else
-                                    -- For other status effects, use the attacker's direction.
-                                    statusCopy.direction = effect.attacker.lastDirection
                                 end
 
                                 CombatActions.applyStatusEffect(target, statusCopy)

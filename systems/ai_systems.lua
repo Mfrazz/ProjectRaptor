@@ -289,6 +289,10 @@ function AISystems.update(dt, world)
                             local path = Navigation.findPath(enemy, targetPlayer, world)
                             if #path > 0 then enemy.targetX, enemy.targetY = path[1].x, path[1].y end
                         elseif intendedAttack and intendedAttack.attack_style == "ranged" then
+                            -- If moving to reposition for a ranged attack, face the player.
+                            local dx, dy = targetPlayer.x - enemy.x, targetPlayer.y - enemy.y
+                            enemy.lastDirection = (math.abs(dx) > math.abs(dy)) and ((dx > 0) and "right" or "left") or ((dy > 0) and "down" or "up")
+
                             local desiredKitingDistSq = (4 * Config.MOVE_STEP)^2
                             if shortestDistanceSq < desiredKitingDistSq then
                                 perform_kiting_move(enemy, targetPlayer, world)
@@ -314,6 +318,10 @@ function AISystems.update(dt, world)
                         if not WorldQueries.isTileOccupied(potentialTargetX, potentialTargetY, enemy.size, enemy, world) then
                             enemy.targetX, enemy.targetY = potentialTargetX, potentialTargetY
                         end
+
+                        -- Update direction when moving randomly
+                        if enemy.targetX ~= enemy.x then enemy.lastDirection = (enemy.targetX > enemy.x) and "right" or "left"
+                        elseif enemy.targetY ~= enemy.y then enemy.lastDirection = (enemy.targetY > enemy.y) and "down" or "up" end
                     end
                 end
 

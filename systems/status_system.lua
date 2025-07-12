@@ -27,9 +27,10 @@ function StatusSystem.update(dt, world)
                 if s.poisonTickTimer >= 1 then
                     s.poisonTickTimer = s.poisonTickTimer - 1
                     if s.hp > 0 then
-                        s.hp = s.hp - 4
+                        local damage = Config.POISON_DAMAGE_PER_SECOND
+                        s.hp = s.hp - damage
                         if s.hp < 0 then s.hp = 0 end
-                        EffectFactory.createDamagePopup(s, 4, false, {0.5, 0, 0.5, 1}) -- Purple poison damage popup
+                        EffectFactory.createDamagePopup(s, damage, false, {0.5, 0, 0.5, 1}) -- Purple poison damage popup
                     end
                 end
             end
