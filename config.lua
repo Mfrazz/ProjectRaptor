@@ -11,7 +11,6 @@ local Config = {
     POISON_DAMAGE_PER_SECOND = 2,
     VIRTUAL_WIDTH = 768,
     VIRTUAL_HEIGHT = 576,
-    --test
 }
 
 return Config
