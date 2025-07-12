@@ -13,13 +13,13 @@ local Assets = {
 function Assets.load()
     -- Load images
     Assets.images.Drapion = love.graphics.newImage("assets/Drapion.png")
+    Assets.images.Sceptile = love.graphics.newImage("assets/Sceptile.png")
+    Assets.images.Pidgeot = love.graphics.newImage("assets/Pidgeot.png")
     Assets.images.Venusaur = love.graphics.newImage("assets/Venusaur.png")
     Assets.images.Florges = love.graphics.newImage("assets/Florges.png")
     Assets.images.Magnezone = love.graphics.newImage("assets/Magnezone.png")
     Assets.images.Tangrowth = love.graphics.newImage("assets/Tangrowth.png")
     Assets.images.Electivire = love.graphics.newImage("assets/Electivire.png")
-    Assets.images.Sceptile = love.graphics.newImage("assets/Sceptile.png")
-    Assets.images.Pidgeot = love.graphics.newImage("assets/Pidgeot.png")
     Assets.images.Brawler = love.graphics.newImage("assets/brawler.png")
     Assets.images.Archer = love.graphics.newImage("assets/archer.png")
     Assets.images.Flag = love.graphics.newImage("assets/flag.png") -- For Sceptile's attack

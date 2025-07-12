@@ -37,7 +37,7 @@ local ActivePlayerSyncSystem = require("systems/active_player_sync_system")
 local EventBus = require("modules.event_bus")
 local InputHandler = require("modules.input_handler")
 
-world = World.new() -- The single instance of our game world
+world = nil -- Will be initialized in love.load after assets are loaded
 GameFont = nil -- Will hold our loaded font
 
 local canvas
@@ -82,6 +82,9 @@ function love.load()
     -- Load all game assets (images, animations, sounds)
     Assets.load()
 
+    -- The world must be created AFTER assets are loaded, so entities can get their sprites.
+    world = World.new()
+
     -- Load the custom font. Replace with your actual font file and its native size.
     -- For pixel fonts, using the intended size (e.g., 8, 16) is crucial for sharpness.
     GameFont = love.graphics.newFont("assets/Px437_DOS-V_TWN16.ttf", 16)
@@ -104,53 +107,8 @@ function love.load()
         end
     end)
 
-    local windowWidth, windowHeight = Config.VIRTUAL_WIDTH, Config.VIRTUAL_HEIGHT
-
-    -- Center the spawn area vertically
-    local playerSpawnYOffset = 5 * Config.MOVE_STEP
-    local spawnPositions = {
-        {x = windowWidth / 2, y = windowHeight / 2 + playerSpawnYOffset}, -- Center
-        {x = windowWidth / 2 - (2 * Config.MOVE_STEP), y = windowHeight / 2 + playerSpawnYOffset}, -- Left
-        {x = windowWidth / 2 + (2 * Config.MOVE_STEP), y = windowHeight / 2 + playerSpawnYOffset}  -- Right
-    }
-
-    -- 1. Populate the roster with all possible characters
-    -- All characters are initially created off-screen. Their positions will be set when they are added to the active party.
-    for type, _ in pairs(CharacterBlueprints) do
-        world.roster[type] = EntityFactory.createSquare(-100, -100, "player", type)
-    end
-
-    -- 2. Set up the character grid layout and the initial active party
-    local allTypes = {}
-    for type, _ in pairs(CharacterBlueprints) do table.insert(allTypes, type) end
-
-    for y = 1, 3 do -- Always create a 3x3 grid
-        world.characterGrid[y] = {}
-        for x = 1, 3 do
-            -- This will place characters and leave remaining slots as nil,
-            -- which prevents crashes when the UI tries to access an empty row.
-            world.characterGrid[y][x] = table.remove(allTypes, 1)
-        end
-    end
-
-    -- 3. Build the initial `players` table from the top row of the grid and assign their starting positions.
-    for i = 1, 3 do
-        local playerType = world.characterGrid[1][i]
-        if playerType then
-            local playerObject = world.roster[playerType]
-            local spawnPos = spawnPositions[i]
-            if spawnPos then
-                -- Set the starting position for the active party member
-                playerObject.x = spawnPos.x
-                playerObject.y = spawnPos.y
-                playerObject.targetX = spawnPos.x
-                playerObject.targetY = spawnPos.y
-            end
-            world:queue_add_entity(playerObject)
-        end
-    end
-
     -- Create enemy squares (light grey)
+    local windowWidth, windowHeight = Config.VIRTUAL_WIDTH, Config.VIRTUAL_HEIGHT
     world:queue_add_entity(EntityFactory.createSquare(windowWidth / 2 + 100, windowHeight / 2 + 40, "enemy", "brawler"))
     world:queue_add_entity(EntityFactory.createSquare(windowWidth / 2 - 100, windowHeight / 2 - 80, "enemy", "brawler"))
     world:queue_add_entity(EntityFactory.createSquare(windowWidth / 2, windowHeight / 2 + 100, "enemy", "archer"))

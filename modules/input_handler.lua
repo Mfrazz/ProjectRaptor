@@ -153,6 +153,12 @@ function InputHandler.handle_key_press(key, currentGameState, world)
                         -- Assign the position of the player being replaced. This prevents new members from spawning off-screen.
                         if oldPositions[i] then
                             playerObject.x, playerObject.y, playerObject.targetX, playerObject.targetY = oldPositions[i].x, oldPositions[i].y, oldPositions[i].targetX, oldPositions[i].targetY
+                        else
+                            -- If there's no old position (e.g., adding a new member to a smaller party),
+                            -- give them a default starting position to avoid spawning at (0,0).
+                            local newX = 100 + (i - 1) * 50
+                            local newY = 100
+                            playerObject.x, playerObject.y, playerObject.targetX, playerObject.targetY = newX, newY, newX, newY
                         end
 
                         world:queue_add_entity(playerObject)

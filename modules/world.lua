@@ -1,6 +1,8 @@
 -- world.lua
 -- The World object is the single source of truth for all entity data and collections.
 
+local EntityFactory = require("data.entities")
+
 local World = {}
 World.__index = World
 
@@ -41,6 +43,61 @@ function World.new()
         drapionActive = false,
         tangrowthCareenDouble = false
     }
+
+    -- Define the full roster in a fixed order based on the asset load sequence.
+    -- This order determines their position in the party select grid.
+    local characterOrder = {
+        "drapionsquare", "sceptilesquare", "pidgeotsquare",
+        "venusaursquare", "florgessquare", "magnezonesquare",
+        "tangrowthsquare", "electiviresquare"
+    }
+
+    -- Create all playable characters and store them in the roster.
+    -- The roster holds the state of all characters (like HP), even when they are not in the active party.
+    -- We create them at a default (0,0) position. Their actual starting positions
+    -- will be set when they are added to the active party or swapped in.
+    for _, playerType in ipairs(characterOrder) do
+        local playerEntity = EntityFactory.createSquare(0, 0, "player", playerType)
+        self.roster[playerType] = playerEntity
+    end
+
+    -- Define the starting positions for the player party (bottom-middle of the screen).
+    local windowWidth, windowHeight = Config.VIRTUAL_WIDTH, Config.VIRTUAL_HEIGHT
+    local playerSpawnYOffset = 5 * Config.MOVE_STEP
+    local spawnPositions = {
+        {x = windowWidth / 2 - (2 * Config.MOVE_STEP), y = windowHeight / 2 + playerSpawnYOffset}, -- Left
+        {x = windowWidth / 2, y = windowHeight / 2 + playerSpawnYOffset},                         -- Center
+        {x = windowWidth / 2 + (2 * Config.MOVE_STEP), y = windowHeight / 2 + playerSpawnYOffset}  -- Right
+    }
+
+    -- Populate the initial active party with the first 3 characters from the fixed order and place them.
+    for i = 1, 3 do
+        local playerType = characterOrder[i]
+        if playerType then
+            local playerEntity = self.roster[playerType]
+            local spawnPos = spawnPositions[i]
+            playerEntity.x = spawnPos.x
+            playerEntity.y = spawnPos.y
+            playerEntity.targetX = playerEntity.x
+            playerEntity.targetY = playerEntity.y
+            self:_add_entity(playerEntity)
+        end
+    end
+
+    -- Populate the 3x3 character selection grid based on the fixed order.
+    local gridX, gridY = 1, 1
+    for _, playerType in ipairs(characterOrder) do
+        -- Ensure the row exists before trying to add to it.
+        if not self.characterGrid[gridY] then self.characterGrid[gridY] = {} end
+
+        self.characterGrid[gridY][gridX] = playerType
+        gridX = gridX + 1
+        if gridX > 3 then
+            gridX = 1
+            gridY = gridY + 1
+        end
+    end
+
     return self
 end
 
