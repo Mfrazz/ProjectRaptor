@@ -11,7 +11,8 @@ function MovementSystem.update(dt, world)
             local oldX, oldY = entity.x, entity.y
             local wasMoving = true
 
-            local moveAmount = (entity.speed * (entity.speedMultiplier or 1)) * dt
+            -- Use the final calculated speed from the StatSystem
+            local moveAmount = ((entity.finalSpeed or entity.speed) * (entity.speedMultiplier or 1)) * dt
             local epsilon = 3
 
             if entity.x < entity.targetX then
@@ -35,7 +36,32 @@ function MovementSystem.update(dt, world)
                 afterimage.timer = afterimage.timer + dt
                 if afterimage.timer >= afterimage.interval then
                     afterimage.timer = afterimage.timer - afterimage.interval
-                    table.insert(world.afterimageEffects, {x = oldX, y = oldY, size = entity.size, color = entity.color, playerType = entity.playerType, lifetime = 0.2, initialLifetime = 0.2})
+                    -- Use the character's dominant color for the afterimage streak.
+                    local blueprint = CharacterBlueprints[entity.playerType]
+                    local streakColor = (blueprint and blueprint.dominantColor) or entity.color
+
+                    -- Get sprite dimensions if available for the streak, otherwise use the logical size.
+                    local streakWidth, streakHeight = entity.size, entity.size
+                    local currentFrame, spriteSheet = nil, nil
+                    if entity.components.animation then
+                        local animComponent = entity.components.animation
+                        local currentAnim = animComponent.animations[animComponent.current]
+                        if currentAnim then
+                            -- This gets the actual pixel dimensions of the current animation frame.
+                            streakWidth, streakHeight = currentAnim:getDimensions()
+                            -- Get the current frame (Quad) and the spritesheet Image
+                            currentFrame = currentAnim.frames[currentAnim.position]
+                            spriteSheet = animComponent.spriteSheet
+                        end
+                    end
+
+                    table.insert(world.afterimageEffects, {
+                        x = oldX, y = oldY, size = entity.size, -- Keep logical size for positioning
+                        width = streakWidth, height = streakHeight, -- Store actual sprite dimensions
+                        frame = currentFrame, -- The Quad for the specific frame
+                        spriteSheet = spriteSheet, -- The Image for the spritesheet
+                        color = streakColor, playerType = entity.playerType, lifetime = 0.2, initialLifetime = 0.2, direction = entity.lastDirection
+                    })
                 end
             end
 

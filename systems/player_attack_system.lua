@@ -20,15 +20,19 @@ function PlayerAttackSystem.update(dt, world)
             -- The core condition: is the action bar full?
             if attackCost and (p.actionBarCurrent >= p.actionBarMax or p.continuousAttack) then
                 p.components.ai.last_attack_key = keyUsed
-                local wasContinuousBefore = p.continuousAttack
-                AttackHandler.execute(p, keyUsed, world)
+                
+                local attackFired = AttackHandler.execute(p, keyUsed, world)
 
-                if not (wasContinuousBefore and not p.continuousAttack) then
-                    p.actionBarCurrent = 0
-                    p.actionBarMax = attackCost
+                if attackFired then
+                    local wasContinuousBefore = p.continuousAttack
+                    if not (wasContinuousBefore and not p.continuousAttack) then
+                        p.actionBarCurrent = 0
+                        p.actionBarMax = attackCost
+                        p.components.actionBarReady = nil -- Consume the "ready" state
+                    end
+                    world.lastAttackTimestamp = love.timer.getTime()
+                    p.pendingAttackKey = nil -- Clear the queued attack
                 end
-                world.lastAttackTimestamp = love.timer.getTime()
-                p.pendingAttackKey = nil -- Clear the queued attack
             end
         end
     end

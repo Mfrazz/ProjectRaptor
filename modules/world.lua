@@ -16,13 +16,14 @@ function World.new()
     self.switchPlayerEffects = {}
     self.grappleLineEffects = {}
     self.new_entities = {}
+    self.flag = nil -- Holds the single Sceptile flag object
     self.afterimageEffects = {}
     self.activePlayerIndex = 1
     self.isAutopilotActive = false
     self.gameTimer = 0
     self.isGameTimerFrozen = false
     self.lastAttackTimestamp = 0
-    self.playerTeamStatus = {} -- For team-wide status effects like Striped Square's L-ability
+    self.playerTeamStatus = {} -- For team-wide status effects like Magnezone Square's L-ability
 
     -- Game State and UI
     self.gameState = "gameplay"
@@ -34,11 +35,11 @@ function World.new()
 
     -- A table to hold the state of team-wide passives, calculated once per frame.
     self.passives = {
-        orangeActive = false,
-        yellowCritBonus = 0,
-        pinkActive = false,
-        cyanActive = false,
-        purpleCareenDouble = false
+        electivireActive = false,
+        venusaurCritBonus = 0,
+        florgesActive = false,
+        drapionActive = false,
+        tangrowthCareenDouble = false
     }
     return self
 end

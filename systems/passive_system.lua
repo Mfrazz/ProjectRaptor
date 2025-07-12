@@ -10,32 +10,35 @@ local PassiveSystem = {}
 -- This system updates the state of team-wide passives and applies their continuous effects.
 function PassiveSystem.update(dt, world)
     -- 1. Update passive states
-    world.passives.orangeActive = false
-    world.passives.yellowCritBonus = 0
-    world.passives.pinkActive = false
-    world.passives.cyanActive = false
-    world.passives.purpleCareenDouble = false
+    world.passives.electivireActive = false
+    world.passives.venusaurCritBonus = 0
+    world.passives.florgesActive = false
+    world.passives.drapionActive = false
+    world.passives.tangrowthCareenDouble = false
+    world.passives.sceptileSpeedBoost = false
 
     for _, p in ipairs(world.players) do
         if p.hp > 0 then
             local blueprint = CharacterBlueprints[p.playerType]
-            if blueprint and blueprint.passive == "orange_comet_damage" then
-                world.passives.orangeActive = true
-            elseif blueprint and blueprint.passive == "yellow_crit_bonus" then
-                world.passives.yellowCritBonus = 0.10
-            elseif blueprint and blueprint.passive == "pink_regen" then
-                world.passives.pinkActive = true
-            elseif blueprint and blueprint.passive == "cyan_action_on_kill" then
-                world.passives.cyanActive = true
-            elseif blueprint and blueprint.passive == "purple_careen_double" then
-                world.passives.purpleCareenDouble = true
+            if blueprint and blueprint.passive == "electivire_comet_damage" then
+                world.passives.electivireActive = true
+            elseif blueprint and blueprint.passive == "venusaur_crit_bonus" then
+                world.passives.venusaurCritBonus = 0.10
+            elseif blueprint and blueprint.passive == "florges_regen" then
+                world.passives.florgesActive = true
+            elseif blueprint and blueprint.passive == "drapion_action_on_kill" then
+                world.passives.drapionActive = true
+            elseif blueprint and blueprint.passive == "tangrowth_careen_double" then
+                world.passives.tangrowthCareenDouble = true
+            elseif blueprint and blueprint.passive == "sceptile_speed_boost" then
+                world.passives.sceptileSpeedBoost = true
             end
         end
     end
 
     -- 2. Apply continuous passive effects
-    -- Pinksquare's Passive (HP Regeneration)
-    if world.passives.pinkActive then
+    -- Florgessquare's Passive (HP Regeneration)
+    if world.passives.florgesActive then
         for _, p in ipairs(world.players) do
             if p.hp > 0 and p.hp < p.maxHp then
                 CombatActions.applyDirectHeal(p, 3 * dt)
@@ -43,8 +46,8 @@ function PassiveSystem.update(dt, world)
         end
     end
 
-    -- Orangesquare's Passive (Comet Damage)
-    if world.passives.orangeActive then
+    -- Electiviresquare's Passive (Comet Damage)
+    if world.passives.electivireActive then
         for _, effect in ipairs(world.switchPlayerEffects) do
             if effect.targetPlayer and effect.targetPlayer.hp > 0 then
                 local targetX = effect.targetPlayer.x + effect.targetPlayer.size / 2

@@ -1,5 +1,5 @@
 -- team_status_system.lua
--- Manages team-wide status effects, like Striped Square's L-ability.
+-- Manages team-wide status effects, like Magnezone Square's L-ability.
 
 local TeamStatusSystem = {}
 

@@ -1,5 +1,5 @@
 -- continuous_attack_system.lua
--- Handles logic for attacks that have an ongoing effect, like Orange Square's J-ability.
+-- Handles logic for attacks that have an ongoing effect, like Electivire Square's J-ability.
 
 local EffectFactory = require("modules.effect_factory")
 

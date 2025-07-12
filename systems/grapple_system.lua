@@ -7,7 +7,7 @@ local CombatActions = require("modules.combat_actions")
 local GrappleSystem = {}
 
 function GrappleSystem.update(dt, world)
-    -- Loop 1: Check for completed single-target grapples (purple_j)
+    -- Loop 1: Check for completed single-target grapples (tangrowth_j)
     for _, entity in ipairs(world.all_entities) do
         if entity.components.grapple_collision_effect then
             local isAtTarget = (entity.x == entity.targetX and entity.y == entity.targetY)
@@ -23,7 +23,7 @@ function GrappleSystem.update(dt, world)
                 -- Clean up
                 entity.components.grapple_collision_effect = nil
                 -- Find and remove the specific grapple line associated with this attacker.
-                -- This prevents it from clearing lines from other effects (like purple_l).
+                -- This prevents it from clearing lines from other effects (like tangrowth_l).
                 for i = #world.grappleLineEffects, 1, -1 do
                     if world.grappleLineEffects[i].attacker == entity then
                         table.remove(world.grappleLineEffects, i)
@@ -33,7 +33,7 @@ function GrappleSystem.update(dt, world)
             end
         end
 
-        -- Loop 2: Check for completed mass grapples (purple_l)
+        -- Loop 2: Check for completed mass grapples (tangrowth_l)
         if entity.components.mass_grapple_pending then
             local effectData = entity.components.mass_grapple_pending
             local allTargetsArrived = true

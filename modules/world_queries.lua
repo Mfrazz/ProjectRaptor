@@ -48,7 +48,7 @@ function WorldQueries.isTargetInPattern(attacker, patternFunc, targets, world)
                     end
                 end
             end
-        -- Handle line-based patterns for attacks like Orange K
+        -- Handle line-based patterns for attacks like Electivire K
         elseif s.type == "line_set" then
             for _, target in ipairs(targets) do
                 if target.hp > 0 then

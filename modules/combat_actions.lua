@@ -51,8 +51,8 @@ function CombatActions.applyStatusEffect(target, effectData)
         -- complex logic later for stacking effects.
         target.statusEffects[effectData.type] = effectData
 
-        -- Check for Purple Square's passive to double careen distance
-        if effectData.type == "careening" and world_ref.passives.purpleCareenDouble then
+        -- Check for Tangrowth Square's passive to double careen distance
+        if effectData.type == "careening" and world_ref.passives.tangrowthCareenDouble then
             effectData.force = effectData.force * 2
         end
     end
@@ -61,7 +61,7 @@ end
 function CombatActions.applyDirectDamage(target, damageAmount, isCrit)
     if not target or not target.hp or target.hp <= 0 then return end
 
-    -- Check for Purple Square's shield first.
+    -- Check for Tangrowth Square's shield first.
     if target.components.shielded then
         target.components.shielded = nil -- Consume the shield
         -- Create a "Blocked!" popup instead of a damage number.

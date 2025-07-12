@@ -1,79 +1,112 @@
 -- character_blueprints.lua
 -- Defines the data-driven blueprints for all player types.
 -- The 'attacks' table now contains string identifiers for attack functions,
--- which are implemented in systems.lua.
+-- which are implemented in player_attacks.lua.
 
 local CharacterBlueprints = {
-    cyansquare = {
-        color = {0, 1, 1},
+    drapionsquare = {
+        displayName = "Drapion",
         maxHp = 120,
         attackStat = 50,
         defenseStat = 50,
-        passive = "cyan_action_on_kill",
+        passive = "drapion_action_on_kill",
+        dominantColor = {0.5, 0.2, 0.8}, -- Drapion: Purple
         attacks = {
-            j = {name = "cyan_j", power = 40, cost = 2, type = "damage", attack_style = "melee"},
-            k = {name = "cyan_k", power = 20, cost = 2, type = "damage", attack_style = "melee"},
-            l = {name = "cyan_l", power = 40, cost = 4, type = "damage", attack_style = "melee"},
+            j = {name = "drapion_j", power = 40, cost = 2, type = "damage", attack_style = "melee"},
+            k = {name = "drapion_k", power = 20, cost = 2, type = "damage", attack_style = "melee"},
+            l = {name = "drapion_l", power = 40, cost = 4, type = "damage", attack_style = "melee"},
         }
     },
-    pinksquare = {
-        color = {1, 0.4, 0.7},
+    florgessquare = {
+        displayName = "Florges",
         maxHp = 100,
         attackStat = 40,
         defenseStat = 50,
-        passive = "pink_regen",
+        passive = "florges_regen",
+        dominantColor = {1.0, 0.6, 0.8}, -- Florges: Light Florges
         attacks = {
-            j = {name = "pink_j", power = 20, cost = 2, type = "damage", attack_style = "melee"},
-            k = {name = "pink_k", power = 40, cost = 5, type = "support", attack_style = "melee"}, -- Power here represents heal amount
-            l = {name = "pink_l", power = 0, cost = 2, type = "support", attack_style = "melee"},
+            j = {name = "florges_j", power = 20, cost = 2, type = "damage", attack_style = "melee"},
+            k = {name = "florges_k", power = 40, cost = 5, type = "support", attack_style = "melee"}, -- Power here represents heal amount
+            l = {name = "florges_l", power = 0, cost = 2, type = "support", attack_style = "melee"},
         }
     },
-    yellowsquare = {
-        color = {1, 1, 0},
+    venusaursquare = {
+        displayName = "Venusaur",
         maxHp = 60,
         attackStat = 60,
         defenseStat = 50,
-        passive = "yellow_crit_bonus",
+        passive = "venusaur_crit_bonus",
+        dominantColor = {0.6, 0.9, 0.6}, -- Venusaur: Pale Green
         attacks = {
-            j = {name = "yellow_j", power = 20, cost = 1, type = "damage", attack_style = "ranged"},
-            k = {name = "yellow_k", power = 20, cost = 2, type = "damage", attack_style = "ranged"},
-            l = {name = "yellow_l", power = 0, cost = 3, type = "support", attack_style = "ranged"},
+            j = {name = "venusaur_j", power = 20, cost = 1, type = "damage", attack_style = "ranged"},
+            k = {name = "venusaur_k", power = 20, cost = 2, type = "damage", attack_style = "ranged"},
+            l = {name = "venusaur_l", power = 0, cost = 3, type = "support", attack_style = "ranged"},
         }
     },
-    stripedsquare = {
-        color = {0, 0, 0}, -- Base color is black, stripes are drawn manually
+    magnezonesquare = {
+        displayName = "Magnezone",
         maxHp = 80,
         attackStat = 50,
         defenseStat = 50,
+        dominantColor = {0.6, 0.6, 0.7}, -- Magnezone: Steel Grey
         -- No team-wide passive, but has unique attack mechanics
         attacks = {
-            j = {name = "striped_j", power = 30, cost = 3, type = "damage", attack_style = "melee"},
-            k = {name = "striped_k", power = 0, cost = 2, type = "support", attack_style = "melee"},
-            l = {name = "striped_l", power = 0, cost = 2, type = "support", attack_style = "melee"},
+            j = {name = "magnezone_j", power = 30, cost = 3, type = "damage", attack_style = "melee"},
+            k = {name = "magnezone_k", power = 0, cost = 2, type = "support", attack_style = "melee"},
+            l = {name = "magnezone_l", power = 0, cost = 2, type = "support", attack_style = "melee"},
         }
     },
-    orangesquare = {
-        color = {1, 0.5, 0},
+    electiviresquare = {
+        displayName = "Electivire",
         maxHp = 100,
         attackStat = 50,
         defenseStat = 50,
-        passive = "orange_comet_damage",
+        passive = "electivire_comet_damage",
+        dominantColor = {1.0, 0.8, 0.1}, -- Electivire: Electric Venusaur
         attacks = {
-            j = {name = "orange_j", power = 20, cost = 5, type = "damage", attack_style = "ranged"}, -- Continuous attack, power is per hit
-            k = {name = "orange_k", power = 40, cost = 2, type = "damage", attack_style = "ranged"},
-            l = {name = "orange_l", power = 0, cost = 1, type = "support", attack_style = "melee"},
+            j = {name = "electivire_j", power = 20, cost = 5, type = "damage", attack_style = "ranged"}, -- Continuous attack, power is per hit
+            k = {name = "electivire_k", power = 40, cost = 2, type = "damage", attack_style = "ranged"},
+            l = {name = "electivire_l", power = 0, cost = 1, type = "support", attack_style = "melee"},
         }
     },
-    purplesquare = {
-        color = {0.4, 0, 0.4},
+    tangrowthsquare = {
+        displayName = "Tangrowth",
         maxHp = 101,
         attackStat = 50,
         defenseStat = 50,
-        passive = "purple_careen_double",
+        passive = "tangrowth_careen_double",
+        dominantColor = {0.1, 0.3, 0.8}, -- Tangrowth: Dark Blue
         attacks = {
-            j = {name = "purple_j", power = 10, cost = 3, type = "damage", attack_style = "ranged"}, -- Grappling Hook
-            k = {name = "purple_k", power = 0, cost = 4, type = "support", attack_style = "ranged"}, -- Team Shield
-            l = {name = "purple_l", power = 10, cost = 5, type = "damage", attack_style = "ranged"}, -- Mass Grapple
+            j = {name = "tangrowth_j", power = 10, cost = 3, type = "damage", attack_style = "ranged"}, -- Grappling Hook
+            k = {name = "tangrowth_k", power = 0, cost = 4, type = "support", attack_style = "ranged"}, -- Team Shield
+            l = {name = "tangrowth_l", power = 10, cost = 5, type = "damage", attack_style = "ranged"}, -- Mass Grapple
+        }
+    },
+    sceptilesquare = {
+        displayName = "Sceptile",
+        maxHp = 110,
+        attackStat = 50,
+        defenseStat = 50,
+        passive = "sceptile_speed_boost",
+        dominantColor = {0.1, 0.8, 0.3}, -- Sceptile: Leaf Green
+        attacks = {
+            j = {name = "sceptile_j", power = 10, cost = 1, type = "utility", attack_style = "ranged"}, -- Plant Flag
+            k = {name = "sceptile_k", power = 30, cost = 4, type = "damage", attack_style = "melee"},  -- Dash to Flag
+            l = {name = "sceptile_l", power = 0, cost = 3, type = "support", attack_style = "ranged"}, -- Zone Shield
+        }
+    },
+    pidgeotsquare = {
+        displayName = "Pidgeot",
+        maxHp = 90,
+        attackStat = 50,
+        defenseStat = 50,
+        passive = "pidgeot_passive_placeholder", -- To be implemented
+        isFlying = true,
+        dominantColor = {0.8, 0.7, 0.4}, -- Pidgeot: Sandy Brown
+        attacks = {
+            j = {name = "pidgeot_j", power = 0, cost = 1, type = "utility", attack_style = "melee"}, -- Quick Attack
+            k = {name = "pidgeot_k", power = 15, cost = 2, type = "damage", attack_style = "melee"}, -- Gust
+            l = {name = "pidgeot_l", power = 20, cost = 1, type = "damage", attack_style = "melee"},  -- Multi-hit warp attack
         }
     }
 }

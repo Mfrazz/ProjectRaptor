@@ -9,7 +9,7 @@ local ProjectileSystem = {}
 
 function ProjectileSystem.update(dt, world)
     local windowWidth, windowHeight = Config.VIRTUAL_WIDTH, Config.VIRTUAL_HEIGHT
-    local yellowSquareCritBonus = world.passives.yellowCritBonus
+    local venusaurSquareCritBonus = world.passives.venusaurCritBonus
 
     for _, entity in ipairs(world.projectiles) do
         if entity.components and entity.components.projectile then
@@ -34,7 +34,7 @@ function ProjectileSystem.update(dt, world)
                 local targets = proj.isEnemyProjectile and world.players or world.enemies
 
                 for _, target in ipairs(targets) do
-                    local totalBonusCrit = (proj.attacker.type == "player" and yellowSquareCritBonus or 0)
+                    local totalBonusCrit = (proj.attacker.type == "player" and venusaurSquareCritBonus or 0)
                     local damage, isCrit = CombatFormulas.calculateFinalDamage(proj.attacker, target, proj.power, totalBonusCrit)
                     if CombatActions.applyDamageToTarget(target, entity.x, entity.y, entity.size, damage, isCrit) then
                         beamHit = true

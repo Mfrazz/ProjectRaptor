@@ -60,7 +60,7 @@ function AISystems.update(dt, world)
     -- Loop 1: Player AI
     for i, p in ipairs(world.players) do
         -- This system only operates on entities with an AI component
-        if p.components.ai and (world.isAutopilotActive or i ~= world.activePlayerIndex) and p.hp > 0 and not p.statusEffects.stunned and not p.statusEffects.careening and not p.continuousAttack then
+        if p.components.ai and (world.isAutopilotActive or i ~= world.activePlayerIndex) and p.hp > 0 and not p.statusEffects.stunned and not p.statusEffects.careening and not p.continuousAttack and not p.components.pidgeot_l_attack then
             local ai = p.components.ai
             local isMoving = (p.x ~= p.targetX) or (p.y ~= p.targetY)
 
@@ -111,8 +111,8 @@ function AISystems.update(dt, world)
  
                     if not patternFunc then
                         canAttack = true -- Assume non-pattern attacks can always be used.
-                    elseif attackData.name == "pink_k" then
-                        -- Special check for Pink K: only consider it usable if a valid target is in the pattern.
+                    elseif attackData.name == "florges_k" then
+                        -- Special check for Florges K: only consider it usable if a valid target is in the pattern.
                         local validTargets = {}
                         for _, ally in ipairs(players) do
                             if ally.hp > 0 and (ally.hp < ally.maxHp or (ally.statusEffects and ally.statusEffects.poison)) then
@@ -131,8 +131,8 @@ function AISystems.update(dt, world)
 
                     if canAttack then
                         local wasContinuousBefore = p.continuousAttack
-                        AttackHandler.execute(p, ai.last_attack_key, world)
-                        if not (wasContinuousBefore and not p.continuousAttack) then
+                        local attackFired = AttackHandler.execute(p, ai.last_attack_key, world)
+                        if attackFired and not (wasContinuousBefore and not p.continuousAttack) then
                             p.actionBarCurrent = 0
                             p.actionBarMax = attackData.cost
                         end
@@ -245,7 +245,7 @@ function AISystems.update(dt, world)
             local isEnemyMoving = (enemy.x ~= enemy.targetX) or (enemy.y ~= enemy.targetY)
 
             -- All enemy actions (moving and attacking) are now gated by the move_timer.
-            if ai.move_timer <= 0 and not isEnemyMoving and not enemy.statusEffects.stunned and not enemy.statusEffects.paralyzed and not enemy.statusEffects.careening then
+            if ai.move_timer <= 0 and not isEnemyMoving and not enemy.statusEffects.stunned and not enemy.statusEffects.paralyzed and not enemy.statusEffects.careening and not enemy.statusEffects.airborne then
                 local actionTaken = false
 
                 -- Priority 1: Attack if the action bar is full and an attack is possible.

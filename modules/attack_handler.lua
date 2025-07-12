@@ -11,8 +11,15 @@ function AttackHandler.execute(square, attackKey, world)
 
     local attackData = blueprint.attacks[attackKey]
     if attackData and attackData.name and PlayerAttacks[attackData.name] then
-        PlayerAttacks[attackData.name](square, attackData.power, world)
+        local result = PlayerAttacks[attackData.name](square, attackData.power, world)
+        -- If the attack function returns a boolean, use it. Otherwise, assume it fired successfully.
+        if type(result) == "boolean" then
+            return result
+        else
+            return true
+        end
     end
+    return false -- Attack not found
 end
 
 return AttackHandler

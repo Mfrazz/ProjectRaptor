@@ -4,7 +4,7 @@
 local AttackPatterns = {}
 
 -- Creates a rectangular pattern from the entity to the edge of the screen.
--- Used by archers, Yellow Square, etc.
+-- Used by archers, Venusaur Square, etc.
 function AttackPatterns.line_of_sight(entity)
     local sx, sy, size = entity.x, entity.y, entity.size
     local windowWidth, windowHeight = Config.VIRTUAL_WIDTH, Config.VIRTUAL_HEIGHT
@@ -27,7 +27,7 @@ function AttackPatterns.line_of_sight(entity)
 end
 
 -- Creates a pattern of spokes radiating from an entity.
--- Used by Striped Square's spin and Punter's spin.
+-- Used by Magnezone Square's spin and Punter's spin.
 function AttackPatterns.radiating_spokes(entity, distance, spoke_delay)
     local effects = {}
     local directions = {
@@ -47,7 +47,7 @@ function AttackPatterns.radiating_spokes(entity, distance, spoke_delay)
 end
 
 -- Creates a 3-stage expanding ripple pattern.
--- Used by Yellow Square's K-attack and various ripple effects.
+-- Used by Venusaur Square's K-attack and various ripple effects.
 function AttackPatterns.ripple(centerX, centerY, rippleCenterSize)
     local step = Config.MOVE_STEP
     local size1 = rippleCenterSize * step
@@ -64,7 +64,7 @@ end
 -- PLAYER ATTACK PATTERNS
 --------------------------------------------------------------------------------
 
-function AttackPatterns.cyan_j(square)
+function AttackPatterns.drapion_j(square)
     local attackOriginX, attackOriginY, attackWidth, attackHeight
     if square.lastDirection == "up" then
         attackOriginX, attackOriginY, attackWidth, attackHeight = square.x - Config.MOVE_STEP, square.y - (Config.MOVE_STEP * 2), Config.MOVE_STEP * 3, Config.MOVE_STEP * 2
@@ -78,7 +78,7 @@ function AttackPatterns.cyan_j(square)
     return {{shape = {type = "rect", x = attackOriginX, y = attackOriginY, w = attackWidth, h = attackHeight}, delay = 0}}
 end
 
-function AttackPatterns.cyan_k(square)
+function AttackPatterns.drapion_k(square)
     local sx, sy = square.x, square.y
     local step = Config.MOVE_STEP
     local direction = square.lastDirection
@@ -111,7 +111,7 @@ function AttackPatterns.cyan_k(square)
     return effects
 end
 
-function AttackPatterns.pink_j(square)
+function AttackPatterns.florges_j(square)
     local effects = {}
     for i = 1, 3 do
         local tileX, tileY = square.x, square.y
@@ -125,15 +125,15 @@ function AttackPatterns.pink_j(square)
     return effects
 end
 
-AttackPatterns.pink_k = AttackPatterns.cyan_j -- Alias
+AttackPatterns.florges_k = AttackPatterns.drapion_j -- Alias
 
-function AttackPatterns.pink_l(square)
+function AttackPatterns.florges_l(square)
     local effectSize = Config.MOVE_STEP * 11
     local effectOriginX, effectOriginY = square.x - (Config.MOVE_STEP * 5), square.y - (Config.MOVE_STEP * 5)
     return {{shape = {type = "rect", x = effectOriginX, y = effectOriginY, w = effectSize, h = effectSize}, delay = 0}}
 end
 
-function AttackPatterns.orange_k(square, world)
+function AttackPatterns.electivire_k(square, world)
     if #world.players < 2 then return {} end
     local beamThickness = Config.SQUARE_SIZE * 2
     local lines = {}
@@ -145,14 +145,14 @@ function AttackPatterns.orange_k(square, world)
     return {{shape = {type = "line_set", lines = lines, thickness = beamThickness}, delay = 0}}
 end
 
-function AttackPatterns.striped_j(square)
+function AttackPatterns.magnezone_j(square)
     return AttackPatterns.radiating_spokes(square, 4, 0.04)
 end
 
-function AttackPatterns.yellow_k(square)
+function AttackPatterns.venusaur_k(square)
     local step = Config.MOVE_STEP
-    local rangeOffset = step * 8
-    local rippleCenterSize = 4
+    local rangeOffset = step * 6
+    local rippleCenterSize = 1
     local pcx, pcy = square.x + square.size / 2, square.y + square.size / 2
     local rippleCenterX, rippleCenterY
 
@@ -165,7 +165,7 @@ function AttackPatterns.yellow_k(square)
     return AttackPatterns.ripple(rippleCenterX, rippleCenterY, rippleCenterSize)
 end
 
-AttackPatterns.yellow_j = AttackPatterns.line_of_sight -- Alias for projectile attack
+AttackPatterns.venusaur_j = AttackPatterns.line_of_sight -- Alias for projectile attack
 
 --------------------------------------------------------------------------------
 -- ENEMY ATTACK PATTERNS
